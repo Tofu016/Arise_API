@@ -1,0 +1,8 @@
+# Forces Apache to actually pass the Authorization header through to PHP.
+# Without this, Apache silently drops it before PHP ever sees it — this
+# isn't a bug in the PHP code itself, since no PHP-level code can recover
+# a header Apache never forwarded in the first place. A well-known,
+# common gotcha specifically with bearer-token auth on Apache + PHP.
+RewriteEngine On
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
