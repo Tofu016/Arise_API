@@ -14,7 +14,10 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // database itself.
 class MY_Controller extends CI_Controller
 {
-    private $allowedOrigin = 'http://localhost:5173';
+    // Which website is allowed to call this API (CORS). Env-driven so
+    // production can point at the real front-end origin without a code
+    // change; falls back to the local Vite dev server.
+    private $allowedOrigin;
 
     // Cached after the first check within a single request, so
     // repeated isAdmin()/isApproved() calls in the same request don't
@@ -25,6 +28,8 @@ class MY_Controller extends CI_Controller
     public function __construct()
     {
         parent::__construct();
+
+        $this->allowedOrigin = $_ENV['CORS_ORIGIN'] ?? 'http://localhost:5173';
 
         header('Access-Control-Allow-Origin: ' . $this->allowedOrigin);
         header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');

@@ -1,5 +1,8 @@
 .DS_Store
 
+# Local environment config — secrets, never commit. Template: .env.example
+.env
+
 application/cache/*
 !application/cache/index.html
 
@@ -17,7 +20,8 @@ user_guide_src/cilexer/dist/*
 user_guide_src/cilexer/pycilexer.egg-info/*
 /vendor/
 
-application/config/database.php
+# database.php is now env-driven (values come from .env, no secrets in
+# the file) so it is committed — deployments must not have to hand-edit it.
 vendor/
 uploads/
 

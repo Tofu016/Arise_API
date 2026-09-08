@@ -53,7 +53,18 @@
  *
  * NOTE: If you change these, also change the error_reporting() code below
  */
-	define('ENVIRONMENT', isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'development');
+	// Load environment-specific settings from Arise_API/.env (never
+	// committed). phpdotenv populates $_ENV so the rest of the
+	// app can read deployment-specific values without hardcoding them.
+	// $_ENV keys come from the .env file; existing behaviour is kept as
+	// the fallback so nothing breaks if .env / vendor is absent.
+	require_once __DIR__ . '/vendor/autoload.php';
+	if (is_file(__DIR__ . '/.env'))
+	{
+		Dotenv\Dotenv::createImmutable(__DIR__)->load();
+	}
+
+	define('ENVIRONMENT', $_ENV['CI_ENV'] ?? (isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'development'));
 
 /*
  *---------------------------------------------------------------

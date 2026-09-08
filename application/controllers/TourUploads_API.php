@@ -27,7 +27,12 @@ class TourUploads_API extends MY_Controller
         // root (where index.php lives) — uploads/ sits directly there,
         // a sibling of application/ and system/, so Apache can serve it
         // as plain static files with zero extra configuration.
-        $this->uploadRoot = FCPATH . 'uploads/';
+        // Overridable via UPLOAD_ROOT in .env (must be an absolute path
+        // with a trailing slash) so production can store files outside
+        // the web root / on a separate volume.
+        $this->uploadRoot = !empty($_ENV['UPLOAD_ROOT'])
+            ? rtrim($_ENV['UPLOAD_ROOT'], '/\\') . '/'
+            : FCPATH . 'uploads/';
     }
 
     // Strips any directory components and rejects anything left that

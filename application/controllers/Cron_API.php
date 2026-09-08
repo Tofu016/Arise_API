@@ -8,17 +8,21 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // index.php Cron_API processEmails), never as a public web endpoint.
 //
 // ============================================================
-// FILL IN YOUR ACTUAL SMTP DETAILS HERE before this can send anything.
-// Whether that's Gmail SMTP, a transactional service (SendGrid,
-// Mailgun), or the institution's own mail server, this is the one,
-// clearly-marked place it plugs in.
+// SMTP credentials come from Arise_API/.env (SMTP_HOST, SMTP_PORT,
+// SMTP_USER, SMTP_PASS, SMTP_FROM_EMAIL, SMTP_FROM_NAME) — never
+// hardcoded here. See .env.example for the template. The fallbacks
+// below are inert placeholders so the file still parses without a
+// .env; email will simply fail to authenticate until .env is filled.
+// index.php loads phpdotenv for HTTP requests, but this controller
+// runs via CLI where index.php still executes first, so $_ENV is
+// populated by the time we get here.
 // ============================================================
-define('SMTP_HOST', 'smtp.example.com');
-define('SMTP_PORT', 587);
-define('SMTP_USERNAME', 'your-username');
-define('SMTP_PASSWORD', 'your-password');
-define('SMTP_FROM_EMAIL', 'noreply@sdca.edu.ph');
-define('SMTP_FROM_NAME', 'ARISE Campus Navigator');
+define('SMTP_HOST', $_ENV['SMTP_HOST'] ?? 'smtp.example.com');
+define('SMTP_PORT', (int) ($_ENV['SMTP_PORT'] ?? 587));
+define('SMTP_USERNAME', $_ENV['SMTP_USER'] ?? '');
+define('SMTP_PASSWORD', $_ENV['SMTP_PASS'] ?? '');
+define('SMTP_FROM_EMAIL', $_ENV['SMTP_FROM_EMAIL'] ?? 'noreply@sdca.edu.ph');
+define('SMTP_FROM_NAME', $_ENV['SMTP_FROM_NAME'] ?? 'ARISE Campus Navigator');
 
 class Cron_API extends CI_Controller
 {

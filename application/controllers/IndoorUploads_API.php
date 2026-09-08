@@ -24,7 +24,12 @@ class IndoorUploads_API extends MY_Controller
         // FCPATH is this project's own root (where index.php lives, e.g.
         // .../htdocs/Arise_API/, always with a trailing slash) — so
         // protected-uploads/ sits directly at the root of Arise_API.
-        $this->protectedRoot = FCPATH . 'protected-uploads/';
+        // Overridable via PROTECTED_UPLOAD_ROOT in .env (absolute path,
+        // trailing slash) so production can keep this user data on a
+        // volume that Apache never serves.
+        $this->protectedRoot = !empty($_ENV['PROTECTED_UPLOAD_ROOT'])
+            ? rtrim($_ENV['PROTECTED_UPLOAD_ROOT'], '/\\') . '/'
+            : FCPATH . 'protected-uploads/';
     }
     public function index()
     {
