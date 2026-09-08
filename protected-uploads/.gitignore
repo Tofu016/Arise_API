@@ -1,0 +1,4 @@
+# Protected indoor uploads — served only via IndoorUploads_API::serve().
+# Ignore all uploaded content; keep the directory itself in the repo.
+*
+!.gitignore

@@ -21,6 +21,10 @@ application/config/database.php
 vendor/
 uploads/
 
+# Protected indoor uploads — contents are user data, never committed
+/protected-uploads/*
+!/protected-uploads/.gitignore
+
 # IDE Files
 #-------------------------
 /nbproject/

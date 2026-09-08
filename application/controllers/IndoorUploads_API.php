@@ -5,11 +5,9 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // stay genuinely login-gated to view, unlike TourUploads_API's Virtual
 // Tour content. Two real differences from that file, both deliberate:
 //
-//  - Files are stored OUTSIDE htdocs entirely (two levels above this
-//    project's own root — see $protectedRoot below), not just blocked
-//    via .htaccess. Given the .htaccess confusion earlier in this
-//    project, a genuinely unreachable location is a stronger guarantee
-//    than a rule that has to be correctly configured and stay that way.
+//  - Files are stored in protected-uploads/ at this project's own root
+//    (see $protectedRoot below), a directory that is .gitignore-d and
+//    served only through serve() below — never linked directly.
 //  - Viewing goes through serve() below, which checks requireApproved()
 //    before ever reading a byte — the actual PHP equivalent of what
 //    getBytes() + Firebase Storage's own rules did before. requireApproved(),
@@ -24,12 +22,15 @@ class IndoorUploads_API extends MY_Controller
     {
         parent::__construct();
         // FCPATH is this project's own root (where index.php lives, e.g.
-        // .../htdocs/Arise_API/) — going up two levels lands outside
-        // htdocs entirely (.../htdocs/'s own parent), genuinely
-        // unreachable by any web request regardless of Apache config.
-        $this->protectedRoot = dirname(FCPATH, 2) . '/protected-uploads/';
+        // .../htdocs/Arise_API/, always with a trailing slash) — so
+        // protected-uploads/ sits directly at the root of Arise_API.
+        $this->protectedRoot = FCPATH . 'protected-uploads/';
     }
-
+    public function index()
+    {
+        http_response_code(404);
+        echo 'Not found.';
+    }
     private function sanitizeFilename($filename)
     {
         $base = basename($filename);
