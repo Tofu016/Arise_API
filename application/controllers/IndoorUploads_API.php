@@ -94,9 +94,10 @@ class IndoorUploads_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No valid file was uploaded.'));
+        // Reports a specific reason — including "the request exceeded
+        // post_max_size", which PHP otherwise makes indistinguishable from
+        // "no file attached". See MY_Controller::requireUploadedFile().
+        if (!$this->requireUploadedFile('file')) {
             return;
         }
 

@@ -139,4 +139,120 @@ class MY_Controller extends CI_Controller
             exit();
         }
     }
+
+    // Confirms a usable uploaded file is present under $_FILES[$field].
+    // On success returns TRUE and the caller proceeds. On failure it emits
+    // a JSON error response with a SPECIFIC reason and the right HTTP
+    // status, then returns FALSE — the caller should just `return;`.
+    //
+    // The point of this over a plain `empty($_FILES['file'])` check: when
+    // an upload exceeds post_max_size, PHP throws away $_POST AND $_FILES
+    // entirely, so "the request body was too big" looks identical to "no
+    // file was attached" — both surface as the misleading
+    // "No valid file was uploaded." Panoramas are large enough (5–30 MB,
+    // sometimes more) that this is a real failure mode, not a hypothetical.
+    protected function requireUploadedFile($field = 'file')
+    {
+        // Case 1 — the whole POST body blew past post_max_size. Bytes were
+        // sent (CONTENT_LENGTH > 0) but PHP discarded everything, so both
+        // superglobals are empty. This is the case the naive check gets
+        // wrong.
+        $contentLength = isset($_SERVER['CONTENT_LENGTH']) ? (int) $_SERVER['CONTENT_LENGTH'] : 0;
+        if ($this->input->method() === 'post' && $contentLength > 0 && empty($_POST) && empty($_FILES)) {
+            $limit = $this->iniSizeBytes('post_max_size');
+            $this->uploadFail(413, $limit > 0
+                ? 'That upload is too large — the request is ' . $this->humanSize($contentLength)
+                  . ' but this server accepts at most ' . $this->humanSize($limit) . ' per request. '
+                  . 'Use a smaller image, or raise post_max_size (and upload_max_filesize) in php.ini.'
+                : 'That upload is too large for this server. Use a smaller image, or raise '
+                  . 'post_max_size and upload_max_filesize in php.ini.');
+            return false;
+        }
+
+        // Case 2 — no file part at all (genuinely nothing attached).
+        if (empty($_FILES[$field]) || !isset($_FILES[$field]['error'])) {
+            $this->uploadFail(400, 'No file was attached to the request (expected form field "' . $field . '").');
+            return false;
+        }
+
+        // Case 3 — a file part is present; PHP's own per-file error code
+        // tells us whether it actually arrived intact.
+        switch ($_FILES[$field]['error']) {
+            case UPLOAD_ERR_OK:
+                return true;
+
+            case UPLOAD_ERR_INI_SIZE:
+            case UPLOAD_ERR_FORM_SIZE:
+                $limit = $this->iniSizeBytes('upload_max_filesize');
+                $this->uploadFail(413, $limit > 0
+                    ? 'That file is too large — the limit for a single upload is ' . $this->humanSize($limit)
+                      . '. Use a smaller image, or raise upload_max_filesize in php.ini.'
+                    : 'That file is larger than this server allows for a single upload.');
+                return false;
+
+            case UPLOAD_ERR_PARTIAL:
+                $this->uploadFail(400, 'The file only uploaded partially — check your connection and try again.');
+                return false;
+
+            case UPLOAD_ERR_NO_FILE:
+                $this->uploadFail(400, 'No file was attached to the request.');
+                return false;
+
+            case UPLOAD_ERR_NO_TMP_DIR:
+            case UPLOAD_ERR_CANT_WRITE:
+            case UPLOAD_ERR_EXTENSION:
+                log_message('error', 'Upload failed server-side (PHP upload error code '
+                    . $_FILES[$field]['error'] . ') — check tmp dir / permissions / php extensions.');
+                $this->uploadFail(500, 'The server could not save the uploaded file. Please tell an administrator.');
+                return false;
+
+            default:
+                $this->uploadFail(400, 'The upload failed (error code ' . (int) $_FILES[$field]['error'] . ').');
+                return false;
+        }
+    }
+
+    // Emits the standard { success:false, error } JSON shape with an
+    // explicit HTTP status. Same shape every other guard here uses.
+    private function uploadFail($status, $message)
+    {
+        http_response_code($status);
+        echo json_encode(array('success' => false, 'error' => $message));
+    }
+
+    // Converts a php.ini shorthand size ("64M", "8K", "1G") to a byte
+    // count. Returns 0 when the setting is empty or "0" — for
+    // post_max_size, 0 legitimately means "no limit", so callers treat 0
+    // as "don't mention a specific number".
+    private function iniSizeBytes($key)
+    {
+        $raw = trim((string) ini_get($key));
+        if ($raw === '' || (int) $raw === 0) {
+            return 0;
+        }
+        $value = (int) $raw;
+        switch (strtolower(substr($raw, -1))) {
+            case 'g':
+                return $value * 1024 * 1024 * 1024;
+            case 'm':
+                return $value * 1024 * 1024;
+            case 'k':
+                return $value * 1024;
+            default:
+                return $value;
+        }
+    }
+
+    // Bytes -> a short human string for error messages ("18.4 MB").
+    private function humanSize($bytes)
+    {
+        $bytes = (int) $bytes;
+        if ($bytes >= 1048576) {
+            return round($bytes / 1048576, 1) . ' MB';
+        }
+        if ($bytes >= 1024) {
+            return round($bytes / 1024) . ' KB';
+        }
+        return $bytes . ' B';
+    }
 }
