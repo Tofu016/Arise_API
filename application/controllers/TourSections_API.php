@@ -26,7 +26,7 @@ class TourSections_API extends MY_Controller
     public function getAll()
     {
         $sections = $this->TourSections_Model->getAll();
-        echo json_encode(array('success' => true, 'sections' => $sections));
+        return Api_response::ok(array('sections' => $sections));
     }
 
     // POST /TourSections_API/create — admin only.
@@ -40,13 +40,11 @@ class TourSections_API extends MY_Controller
         $coverPhotoPath = isset($data['cover_photo_path']) ? $data['cover_photo_path'] : null;
 
         if (empty(trim((string) $label))) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Section name is required.'));
-            return;
+            return Api_response::fail(400, 'Section name is required.');
         }
 
         $section = $this->TourSections_Model->create($label, $coverPhotoPath);
-        echo json_encode(array('success' => true, 'section' => $section));
+        return Api_response::ok(array('section' => $section));
     }
 
     // PATCH /TourSections_API/update/{id} — admin only.
@@ -55,9 +53,7 @@ class TourSections_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing section id.'));
-            return;
+            return Api_response::fail(400, 'Missing section id.');
         }
 
         $data = $this->getInput();
@@ -65,13 +61,11 @@ class TourSections_API extends MY_Controller
         $patch = array_intersect_key($data, array_flip($allowed));
 
         if (empty($patch)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No valid fields to update.'));
-            return;
+            return Api_response::fail(400, 'No valid fields to update.');
         }
 
         $section = $this->TourSections_Model->update($id, $patch);
-        echo json_encode(array('success' => true, 'section' => $section));
+        return Api_response::ok(array('section' => $section));
     }
 
     // DELETE /TourSections_API/delete/{id} — admin only.
@@ -80,12 +74,10 @@ class TourSections_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing section id.'));
-            return;
+            return Api_response::fail(400, 'Missing section id.');
         }
 
         $this->TourSections_Model->delete($id);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 }

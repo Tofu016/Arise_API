@@ -24,7 +24,7 @@ class Users_API extends MY_Controller
     {
         $this->requireAdmin();
         $users = $this->Users_Model->getAll();
-        echo json_encode(array('success' => true, 'users' => $users));
+        return Api_response::ok(array('users' => $users));
     }
 
     // PATCH /Users_API/updateRole/{id} — admin only.
@@ -34,9 +34,7 @@ class Users_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing user id.'));
-            return;
+            return Api_response::fail(400, 'Missing user id.');
         }
 
         $data = $this->getInput();
@@ -44,16 +42,12 @@ class Users_API extends MY_Controller
 
         if (!$this->Users_Model->isValidRole($newRole)) {
             $allowed = implode(', ', $this->Users_Model->getAllowedRoles());
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => "Invalid role. Must be one of: {$allowed}"));
-            return;
+            return Api_response::fail(400, "Invalid role. Must be one of: {$allowed}");
         }
 
         $existing = $this->Users_Model->find($id);
         if (!$existing) {
-            http_response_code(404);
-            echo json_encode(array('success' => false, 'error' => 'User not found.'));
-            return;
+            return Api_response::fail(404, 'User not found.');
         }
 
         $wasApproved = $existing['role'] === 'pending' && $newRole !== 'pending';
@@ -68,7 +62,7 @@ class Users_API extends MY_Controller
             );
         }
 
-        echo json_encode(array('success' => true, 'user' => $user));
+        return Api_response::ok(array('user' => $user));
     }
 
     // DELETE /Users_API/delete/{id} — admin only.
@@ -77,9 +71,7 @@ class Users_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing user id.'));
-            return;
+            return Api_response::fail(400, 'Missing user id.');
         }
 
         // Same safeguard as the original deleteUserAccount Cloud
@@ -87,12 +79,10 @@ class Users_API extends MY_Controller
         // out by deleting their own currently-active account.
         $currentUser = $this->getCurrentUser();
         if ($currentUser !== null && (string) $currentUser['id'] === (string) $id) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'You cannot delete your own account.'));
-            return;
+            return Api_response::fail(400, 'You cannot delete your own account.');
         }
 
         $this->Users_Model->delete($id);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 }

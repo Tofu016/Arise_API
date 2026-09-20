@@ -18,7 +18,7 @@ class Buildings_API extends MY_Controller
     public function getAll()
     {
         $buildings = $this->Buildings_Model->getAll();
-        echo json_encode(array('success' => true, 'buildings' => $buildings));
+        return Api_response::ok(array('buildings' => $buildings));
     }
 
     // POST /Buildings_API/create — admin only.
@@ -32,14 +32,10 @@ class Buildings_API extends MY_Controller
         $floorCount = isset($data['floor_count']) ? $data['floor_count'] : null;
 
         if (empty(trim((string) $name))) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Building name is required.'));
-            return;
+            return Api_response::fail(400, 'Building name is required.');
         }
         if (!is_numeric($floorCount) || $floorCount < 1) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Floor count must be a positive number.'));
-            return;
+            return Api_response::fail(400, 'Floor count must be a positive number.');
         }
 
         $building = $this->Buildings_Model->create(
@@ -49,7 +45,7 @@ class Buildings_API extends MY_Controller
             isset($data['lng']) ? $data['lng'] : null
         );
 
-        echo json_encode(array('success' => true, 'building' => $building));
+        return Api_response::ok(array('building' => $building));
     }
 
     // PATCH /Buildings_API/update/{id} — admin only.
@@ -58,9 +54,7 @@ class Buildings_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing building id.'));
-            return;
+            return Api_response::fail(400, 'Missing building id.');
         }
 
         $data = $this->getInput();
@@ -68,13 +62,11 @@ class Buildings_API extends MY_Controller
         $patch = array_intersect_key($data, array_flip($allowed));
 
         if (empty($patch)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No valid fields to update.'));
-            return;
+            return Api_response::fail(400, 'No valid fields to update.');
         }
 
         $building = $this->Buildings_Model->update($id, $patch);
-        echo json_encode(array('success' => true, 'building' => $building));
+        return Api_response::ok(array('building' => $building));
     }
 
     // DELETE /Buildings_API/delete/{id} — admin only.
@@ -83,21 +75,14 @@ class Buildings_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing building id.'));
-            return;
+            return Api_response::fail(400, 'Missing building id.');
         }
 
         if ($this->Buildings_Model->hasNodes($id)) {
-            http_response_code(409);
-            echo json_encode(array(
-                'success' => false,
-                'error' => 'This building still has nodes assigned to it. Reassign or delete those nodes first.',
-            ));
-            return;
+            return Api_response::fail(409, 'This building still has nodes assigned to it. Reassign or delete those nodes first.');
         }
 
         $this->Buildings_Model->delete($id);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 }

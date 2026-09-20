@@ -22,9 +22,7 @@ class Feedback_API extends MY_Controller
 
         $rating = isset($data['rating']) ? (int) $data['rating'] : 0;
         if ($rating < 1 || $rating > 5) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Rating must be between 1 and 5.'));
-            return;
+            return Api_response::fail(400, 'Rating must be between 1 and 5.');
         }
 
         $feedback = $this->Feedback_Model->create(array(
@@ -34,27 +32,27 @@ class Feedback_API extends MY_Controller
             'email' => isset($data['email']) && trim($data['email']) !== '' ? trim($data['email']) : null,
         ));
 
-        echo json_encode(array('success' => true, 'feedback' => $feedback));
+        return Api_response::ok(array('feedback' => $feedback));
     }
 
     // GET /Feedback_API/getAll — admin only.
     public function getAll()
     {
         $this->requireAdmin();
-        echo json_encode(array('success' => true, 'feedback' => $this->Feedback_Model->getAll()));
+        return Api_response::ok(array('feedback' => $this->Feedback_Model->getAll()));
     }
 
     // PATCH /Feedback_API/markReviewed/{id} — admin only.
     public function markReviewed($id)
     {
         $this->requireAdmin();
-        echo json_encode(array('success' => true, 'feedback' => $this->Feedback_Model->markReviewed($id)));
+        return Api_response::ok(array('feedback' => $this->Feedback_Model->markReviewed($id)));
     }
 
     // GET /Feedback_API/unreadCount — admin only.
     public function unreadCount()
     {
         $this->requireAdmin();
-        echo json_encode(array('success' => true, 'count' => $this->Feedback_Model->countUnreviewed()));
+        return Api_response::ok(array('count' => $this->Feedback_Model->countUnreviewed()));
     }
 }
