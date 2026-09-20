@@ -399,7 +399,6 @@ Also back up the uploaded images — `/var/www/arise-api/uploads/` and
 | `UPLOAD_ROOT` | `/var/www/arise-api/uploads/` | absolute, trailing slash; folder is under DocumentRoot and served directly |
 | `PROTECTED_UPLOAD_ROOT` | `/var/www/arise-api/protected-uploads/` | absolute, trailing slash; under DocumentRoot but Apache is told to deny it (A7 + A8) |
 | `SMTP_HOST` … `SMTP_FROM_NAME` | Brevo / Mailgun / Postmark | quote values with spaces |
-| `SENTRY_DSN` | *(blank)* | optional, error tracking (item 10) |
 
 Blank or missing keys fall back to the hard-coded development defaults in
 the code.
