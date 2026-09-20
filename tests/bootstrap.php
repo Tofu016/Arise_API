@@ -40,3 +40,10 @@ function log_message($level, $message)
 }
 
 require_once APPPATH . 'core/MY_Controller.php';
+
+// Controllers whose actions are tested directly (see ActionTestCase).
+foreach (array('Auth', 'Nodes', 'TourStops', 'Buildings', 'Users', 'TourSections', 'PlacardDialogs') as $controller) {
+    require_once APPPATH . "controllers/{$controller}_API.php";
+}
+require_once __DIR__ . '/support/FakeModel.php';
+require_once __DIR__ . '/support/ActionTestCase.php';
