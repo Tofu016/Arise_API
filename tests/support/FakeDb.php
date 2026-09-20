@@ -43,6 +43,12 @@ class FakeDb
         return $this;
     }
 
+    public function limit($count)
+    {
+        $this->log[] = array('limit', $count);
+        return $this;
+    }
+
     public function get($table = null)
     {
         $table = $table !== null ? $table : $this->from;
@@ -51,7 +57,8 @@ class FakeDb
         $rows = isset($this->tables[$table]) ? $this->tables[$table] : array();
         foreach ($this->wheres as $where) {
             $rows = array_values(array_filter($rows, function ($row) use ($where) {
-                return isset($row[$where[0]]) && $row[$where[0]] === $where[1];
+                // A null value matches a null column, like SQL's IS NULL.
+                return array_key_exists($where[0], $row) && $row[$where[0]] === $where[1];
             }));
         }
         $this->reset();

@@ -55,6 +55,8 @@ class CI_Model
 {
 }
 
+require_once APPPATH . 'models/Auth_Model.php';
+require_once APPPATH . 'models/Email_Model.php';
 require_once APPPATH . 'models/Nodes_Model.php';
 require_once APPPATH . 'models/TourStops_Model.php';
 require_once __DIR__ . '/support/FakeDb.php';
