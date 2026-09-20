@@ -90,20 +90,14 @@ class Nodes_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing node id.');
-        }
+        Api_input::requireId($id, 'node');
 
         $data = $this->getInput();
         $allowed = array(
             'name', 'building', 'floor', 'type', 'photo_path',
             'leads_to_floor', 'flowchart_position_x', 'flowchart_position_y',
         );
-        $patch = array_intersect_key($data, array_flip($allowed));
-
-        if (empty($patch)) {
-            return Api_response::fail(400, 'No valid fields to update.');
-        }
+        $patch = Api_input::patch($data, $allowed);
 
         // Same check as create() — only relevant if building is
         // actually part of this particular update.
@@ -120,9 +114,7 @@ class Nodes_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing node id.');
-        }
+        Api_input::requireId($id, 'node');
 
         $this->Nodes_Model->delete($id);
         return Api_response::ok();
@@ -135,12 +127,7 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         $data = $this->getInput();
-        $required = array('node_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch');
-        foreach ($required as $field) {
-            if (!isset($data[$field])) {
-                return Api_response::fail(400, "Missing field: {$field}");
-            }
-        }
+        Api_input::requirePresent($data, array('node_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch'));
 
         $this->Nodes_Model->addNeighbor(
             $data['node_id'],
@@ -161,9 +148,7 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         $data = $this->getInput();
-        if (empty($data['node_id']) || empty($data['neighbor_id'])) {
-            return Api_response::fail(400, 'node_id and neighbor_id are both required.');
-        }
+        Api_input::requireFilled($data, array('node_id', 'neighbor_id'), 'node_id and neighbor_id are both required.');
 
         $this->Nodes_Model->removeNeighbor($data['node_id'], $data['neighbor_id']);
         return Api_response::ok();
@@ -176,12 +161,7 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         $data = $this->getInput();
-        $required = array('node_id', 'neighbor_id', 'yaw', 'pitch');
-        foreach ($required as $field) {
-            if (!isset($data[$field])) {
-                return Api_response::fail(400, "Missing field: {$field}");
-            }
-        }
+        Api_input::requirePresent($data, array('node_id', 'neighbor_id', 'yaw', 'pitch'));
 
         $this->Nodes_Model->updateNeighborAngle(
             $data['node_id'],
@@ -199,12 +179,7 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         $data = $this->getInput();
-        $required = array('node_id', 'type', 'label', 'yaw', 'pitch');
-        foreach ($required as $field) {
-            if (!isset($data[$field])) {
-                return Api_response::fail(400, "Missing field: {$field}");
-            }
-        }
+        Api_input::requirePresent($data, array('node_id', 'type', 'label', 'yaw', 'pitch'));
 
         if (!$this->Nodes_Model->isValidMarkerType($data['type'])) {
             $allowed = implode(', ', $this->Nodes_Model->getAllowedMarkerTypes());
@@ -227,21 +202,15 @@ class Nodes_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($markerId)) {
-            return Api_response::fail(400, 'Missing marker id.');
-        }
+        Api_input::requireId($markerId, 'marker');
 
         $data = $this->getInput();
         $allowed = array('type', 'label', 'yaw', 'pitch');
-        $patch = array_intersect_key($data, array_flip($allowed));
+        $patch = Api_input::patch($data, $allowed);
 
         if (isset($patch['type']) && !$this->Nodes_Model->isValidMarkerType($patch['type'])) {
             $allowedTypes = implode(', ', $this->Nodes_Model->getAllowedMarkerTypes());
             return Api_response::fail(400, "Invalid marker type. Must be one of: {$allowedTypes}");
-        }
-
-        if (empty($patch)) {
-            return Api_response::fail(400, 'No valid fields to update.');
         }
 
         $this->Nodes_Model->updateMarker($markerId, $patch);
@@ -253,9 +222,7 @@ class Nodes_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($markerId)) {
-            return Api_response::fail(400, 'Missing marker id.');
-        }
+        Api_input::requireId($markerId, 'marker');
 
         $this->Nodes_Model->deleteMarker($markerId);
         return Api_response::ok();
@@ -284,9 +251,7 @@ class Nodes_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($roomRowId)) {
-            return Api_response::fail(400, 'Missing room id.');
-        }
+        Api_input::requireId($roomRowId, 'room');
 
         $this->Nodes_Model->removeRoom($roomRowId);
         return Api_response::ok();

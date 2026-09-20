@@ -81,13 +81,11 @@ class TourStops_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing stop id.');
-        }
+        Api_input::requireId($id, 'stop');
 
         $data = $this->getInput();
         $allowed = array('name', 'section_id', 'photo_path', 'description');
-        $patch = array_intersect_key($data, array_flip($allowed));
+        $patch = Api_input::patch($data, $allowed);
 
         // section_id is a foreign key — the database expects either a
         // real tour_sections.id or NULL, never a literal empty string.
@@ -100,10 +98,6 @@ class TourStops_API extends MY_Controller
             $patch['section_id'] = null;
         }
 
-        if (empty($patch)) {
-            return Api_response::fail(400, 'No valid fields to update.');
-        }
-
         $stop = $this->TourStops_Model->update($id, $patch);
         return Api_response::ok(array('stop' => $stop));
     }
@@ -113,9 +107,7 @@ class TourStops_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing stop id.');
-        }
+        Api_input::requireId($id, 'stop');
 
         $this->TourStops_Model->delete($id);
         return Api_response::ok();
@@ -130,12 +122,7 @@ class TourStops_API extends MY_Controller
         $this->requireAdmin();
 
         $data = $this->getInput();
-        $required = array('stop_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch');
-        foreach ($required as $field) {
-            if (!isset($data[$field])) {
-                return Api_response::fail(400, "Missing field: {$field}");
-            }
-        }
+        Api_input::requirePresent($data, array('stop_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch'));
 
         $this->TourStops_Model->addNeighbor(
             $data['stop_id'],
@@ -156,9 +143,7 @@ class TourStops_API extends MY_Controller
         $this->requireAdmin();
 
         $data = $this->getInput();
-        if (empty($data['stop_id']) || empty($data['neighbor_id'])) {
-            return Api_response::fail(400, 'stop_id and neighbor_id are both required.');
-        }
+        Api_input::requireFilled($data, array('stop_id', 'neighbor_id'), 'stop_id and neighbor_id are both required.');
 
         $this->TourStops_Model->removeNeighbor($data['stop_id'], $data['neighbor_id']);
         return Api_response::ok();
@@ -174,12 +159,7 @@ class TourStops_API extends MY_Controller
         $this->requireAdmin();
 
         $data = $this->getInput();
-        $required = array('stop_id', 'neighbor_id', 'yaw', 'pitch');
-        foreach ($required as $field) {
-            if (!isset($data[$field])) {
-                return Api_response::fail(400, "Missing field: {$field}");
-            }
-        }
+        Api_input::requirePresent($data, array('stop_id', 'neighbor_id', 'yaw', 'pitch'));
 
         $this->TourStops_Model->updateNeighborAngle(
             $data['stop_id'],
@@ -197,12 +177,7 @@ class TourStops_API extends MY_Controller
         $this->requireAdmin();
 
         $data = $this->getInput();
-        $required = array('stop_id', 'label', 'yaw', 'pitch');
-        foreach ($required as $field) {
-            if (!isset($data[$field])) {
-                return Api_response::fail(400, "Missing field: {$field}");
-            }
-        }
+        Api_input::requirePresent($data, array('stop_id', 'label', 'yaw', 'pitch'));
 
         $photos = isset($data['photos']) && is_array($data['photos']) ? $data['photos'] : array();
         $markerId = $this->TourStops_Model->addMarker(
@@ -224,18 +199,14 @@ class TourStops_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($markerId)) {
-            return Api_response::fail(400, 'Missing marker id.');
-        }
+        Api_input::requireId($markerId, 'marker');
 
         $data = $this->getInput();
         $allowed = array('label', 'yaw', 'pitch');
-        $patch = array_intersect_key($data, array_flip($allowed));
         $photos = (isset($data['photos']) && is_array($data['photos'])) ? $data['photos'] : null;
-
-        if (empty($patch) && $photos === null) {
-            return Api_response::fail(400, 'No valid fields to update.');
-        }
+        // A body carrying only a photo list (even an empty one, which
+        // clears them) is still a change.
+        $patch = Api_input::patch($data, $allowed, $photos !== null);
 
         $this->TourStops_Model->updateMarker($markerId, $patch, $photos);
         return Api_response::ok();
@@ -246,9 +217,7 @@ class TourStops_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($markerId)) {
-            return Api_response::fail(400, 'Missing marker id.');
-        }
+        Api_input::requireId($markerId, 'marker');
 
         $this->TourStops_Model->deleteMarker($markerId);
         return Api_response::ok();
