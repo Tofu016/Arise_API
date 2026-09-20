@@ -19,7 +19,7 @@ class TourStops_API extends MY_Controller
     public function getAll()
     {
         $stops = $this->TourStops_Model->getAll();
-        echo json_encode(array('success' => true, 'stops' => $stops));
+        return Api_response::ok(array('stops' => $stops));
     }
 
     // POST /TourStops_API/create — admin only.
@@ -38,15 +38,11 @@ class TourStops_API extends MY_Controller
         $requestedId = isset($data['id']) ? trim($data['id']) : null;
 
         if (empty(trim((string) $name))) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Stop name is required.'));
-            return;
+            return Api_response::fail(400, 'Stop name is required.');
         }
 
         if (!empty($requestedId) && $this->TourStops_Model->idExists($requestedId)) {
-            http_response_code(409);
-            echo json_encode(array('success' => false, 'error' => "ID '{$requestedId}' is already used by another stop."));
-            return;
+            return Api_response::fail(409, "ID '{$requestedId}' is already used by another stop.");
         }
 
         $stop = $this->TourStops_Model->create(
@@ -57,7 +53,7 @@ class TourStops_API extends MY_Controller
             $requestedId
         );
 
-        echo json_encode(array('success' => true, 'stop' => $stop));
+        return Api_response::ok(array('stop' => $stop));
     }
 
     // PATCH /TourStops_API/rename/{oldId} — admin only.
@@ -70,18 +66,14 @@ class TourStops_API extends MY_Controller
         $newId = isset($data['new_id']) ? trim($data['new_id']) : '';
 
         if (empty($oldId) || $newId === '') {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Both the current and new id are required.'));
-            return;
+            return Api_response::fail(400, 'Both the current and new id are required.');
         }
         if ($this->TourStops_Model->idExists($newId)) {
-            http_response_code(409);
-            echo json_encode(array('success' => false, 'error' => "ID '{$newId}' is already used by another stop."));
-            return;
+            return Api_response::fail(409, "ID '{$newId}' is already used by another stop.");
         }
 
         $stop = $this->TourStops_Model->renameStop($oldId, $newId);
-        echo json_encode(array('success' => true, 'stop' => $stop));
+        return Api_response::ok(array('stop' => $stop));
     }
 
     // PATCH /TourStops_API/update/{id} — admin only.
@@ -90,9 +82,7 @@ class TourStops_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing stop id.'));
-            return;
+            return Api_response::fail(400, 'Missing stop id.');
         }
 
         $data = $this->getInput();
@@ -111,13 +101,11 @@ class TourStops_API extends MY_Controller
         }
 
         if (empty($patch)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No valid fields to update.'));
-            return;
+            return Api_response::fail(400, 'No valid fields to update.');
         }
 
         $stop = $this->TourStops_Model->update($id, $patch);
-        echo json_encode(array('success' => true, 'stop' => $stop));
+        return Api_response::ok(array('stop' => $stop));
     }
 
     // DELETE /TourStops_API/delete/{id} — admin only.
@@ -126,13 +114,11 @@ class TourStops_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing stop id.'));
-            return;
+            return Api_response::fail(400, 'Missing stop id.');
         }
 
         $this->TourStops_Model->delete($id);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /TourStops_API/addNeighbor — admin only.
@@ -147,9 +133,7 @@ class TourStops_API extends MY_Controller
         $required = array('stop_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch');
         foreach ($required as $field) {
             if (!isset($data[$field])) {
-                http_response_code(400);
-                echo json_encode(array('success' => false, 'error' => "Missing field: {$field}"));
-                return;
+                return Api_response::fail(400, "Missing field: {$field}");
             }
         }
 
@@ -162,7 +146,7 @@ class TourStops_API extends MY_Controller
             $data['reverse_pitch']
         );
 
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /TourStops_API/removeNeighbor — admin only.
@@ -173,13 +157,11 @@ class TourStops_API extends MY_Controller
 
         $data = $this->getInput();
         if (empty($data['stop_id']) || empty($data['neighbor_id'])) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'stop_id and neighbor_id are both required.'));
-            return;
+            return Api_response::fail(400, 'stop_id and neighbor_id are both required.');
         }
 
         $this->TourStops_Model->removeNeighbor($data['stop_id'], $data['neighbor_id']);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // PATCH /TourStops_API/updateNeighborAngle — admin only.
@@ -195,9 +177,7 @@ class TourStops_API extends MY_Controller
         $required = array('stop_id', 'neighbor_id', 'yaw', 'pitch');
         foreach ($required as $field) {
             if (!isset($data[$field])) {
-                http_response_code(400);
-                echo json_encode(array('success' => false, 'error' => "Missing field: {$field}"));
-                return;
+                return Api_response::fail(400, "Missing field: {$field}");
             }
         }
 
@@ -207,7 +187,7 @@ class TourStops_API extends MY_Controller
             $data['yaw'],
             $data['pitch']
         );
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /TourStops_API/addMarker — admin only.
@@ -220,9 +200,7 @@ class TourStops_API extends MY_Controller
         $required = array('stop_id', 'label', 'yaw', 'pitch');
         foreach ($required as $field) {
             if (!isset($data[$field])) {
-                http_response_code(400);
-                echo json_encode(array('success' => false, 'error' => "Missing field: {$field}"));
-                return;
+                return Api_response::fail(400, "Missing field: {$field}");
             }
         }
 
@@ -235,7 +213,7 @@ class TourStops_API extends MY_Controller
             $photos
         );
 
-        echo json_encode(array('success' => true, 'marker_id' => $markerId));
+        return Api_response::ok(array('marker_id' => $markerId));
     }
 
     // PATCH /TourStops_API/updateMarker/{marker_id} — admin only.
@@ -247,9 +225,7 @@ class TourStops_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($markerId)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing marker id.'));
-            return;
+            return Api_response::fail(400, 'Missing marker id.');
         }
 
         $data = $this->getInput();
@@ -258,13 +234,11 @@ class TourStops_API extends MY_Controller
         $photos = (isset($data['photos']) && is_array($data['photos'])) ? $data['photos'] : null;
 
         if (empty($patch) && $photos === null) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No valid fields to update.'));
-            return;
+            return Api_response::fail(400, 'No valid fields to update.');
         }
 
         $this->TourStops_Model->updateMarker($markerId, $patch, $photos);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // DELETE /TourStops_API/deleteMarker/{marker_id} — admin only.
@@ -273,12 +247,10 @@ class TourStops_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($markerId)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing marker id.'));
-            return;
+            return Api_response::fail(400, 'Missing marker id.');
         }
 
         $this->TourStops_Model->deleteMarker($markerId);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 }

@@ -18,9 +18,7 @@ class Auth_API extends MY_Controller
         $password = isset($data['password']) ? $data['password'] : '';
 
         if ($email === '' || $password === '') {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Email and password are required.'));
-            return;
+            return Api_response::fail(400, 'Email and password are required.');
         }
 
         $user = $this->Auth_Model->verifyCredentials($email, $password);
@@ -28,15 +26,12 @@ class Auth_API extends MY_Controller
             // Deliberately the same error for "no such email" and
             // "wrong password" — distinguishing them lets an attacker
             // enumerate which emails are actually registered.
-            http_response_code(401);
-            echo json_encode(array('success' => false, 'error' => 'Invalid email or password.'));
-            return;
+            return Api_response::fail(401, 'Invalid email or password.');
         }
 
         $token = $this->Auth_Model->createToken($user['id']);
 
-        echo json_encode(array(
-            'success' => true,
+        return Api_response::ok(array(
             'token' => $token,
             'user' => array(
                 'id' => $user['id'],
@@ -56,14 +51,11 @@ class Auth_API extends MY_Controller
     public function me()
     {
         if (!$this->signedIn()) {
-            http_response_code(401);
-            echo json_encode(array('success' => false, 'error' => 'Not signed in.'));
-            return;
+            return Api_response::fail(401, 'Not signed in.');
         }
 
         $user = $this->getCurrentUser();
-        echo json_encode(array(
-            'success' => true,
+        return Api_response::ok(array(
             'user' => array(
                 'id' => $user['id'],
                 'email' => $user['email'],
@@ -80,13 +72,11 @@ class Auth_API extends MY_Controller
     {
         $header = $this->input->get_request_header('Authorization');
         if (empty($header) || stripos($header, 'Bearer ') !== 0) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No token provided.'));
-            return;
+            return Api_response::fail(400, 'No token provided.');
         }
         $token = trim(substr($header, 7));
         $this->Auth_Model->deleteToken($token);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /Auth_API/register
@@ -106,9 +96,7 @@ class Auth_API extends MY_Controller
         $name = isset($data['name']) ? trim($data['name']) : '';
 
         if ($email === '' || $password === '' || $name === '') {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Email, password, and name are all required.'));
-            return;
+            return Api_response::fail(400, 'Email, password, and name are all required.');
         }
 
         // Same rule as the original enforceEmailDomain blocking trigger —
@@ -116,21 +104,15 @@ class Auth_API extends MY_Controller
         // only and this runs on PHP 7.4.
         $requiredDomain = '@sdca.edu.ph';
         if (substr($email, -strlen($requiredDomain)) !== $requiredDomain) {
-            http_response_code(403);
-            echo json_encode(array('success' => false, 'error' => 'Registration is only open to @sdca.edu.ph email addresses.'));
-            return;
+            return Api_response::fail(403, 'Registration is only open to @sdca.edu.ph email addresses.');
         }
 
         if (strlen($password) < 8) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Password must be at least 8 characters.'));
-            return;
+            return Api_response::fail(400, 'Password must be at least 8 characters.');
         }
 
         if ($this->Auth_Model->emailExists($email)) {
-            http_response_code(409);
-            echo json_encode(array('success' => false, 'error' => 'An account with this email already exists.'));
-            return;
+            return Api_response::fail(409, 'An account with this email already exists.');
         }
 
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
@@ -144,8 +126,7 @@ class Auth_API extends MY_Controller
 
         $token = $this->Auth_Model->createToken($user['id']);
 
-        echo json_encode(array(
-            'success' => true,
+        return Api_response::ok(array(
             'token' => $token,
             'user' => array(
                 'id' => $user['id'],
@@ -170,9 +151,7 @@ class Auth_API extends MY_Controller
         $email = isset($data['email']) ? trim(strtolower($data['email'])) : '';
 
         if ($email === '') {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Email is required.'));
-            return;
+            return Api_response::fail(400, 'Email is required.');
         }
 
         $user = $this->Auth_Model->findByEmail($email);
@@ -193,7 +172,7 @@ class Auth_API extends MY_Controller
             );
         }
 
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /Auth_API/resetPassword
@@ -211,22 +190,16 @@ class Auth_API extends MY_Controller
         $password = isset($data['password']) ? $data['password'] : '';
 
         if ($token === '' || $password === '') {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Token and new password are required.'));
-            return;
+            return Api_response::fail(400, 'Token and new password are required.');
         }
 
         if (strlen($password) < 8) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Password must be at least 8 characters.'));
-            return;
+            return Api_response::fail(400, 'Password must be at least 8 characters.');
         }
 
         $userId = $this->Auth_Model->validatePasswordResetToken($token);
         if (!$userId) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'This reset link is invalid or has expired.'));
-            return;
+            return Api_response::fail(400, 'This reset link is invalid or has expired.');
         }
 
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
@@ -234,6 +207,6 @@ class Auth_API extends MY_Controller
         $this->Auth_Model->deletePasswordResetToken($token);
         $this->Auth_Model->deleteAllTokensForUser($userId);
 
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 }

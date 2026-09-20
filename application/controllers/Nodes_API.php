@@ -22,7 +22,7 @@ class Nodes_API extends MY_Controller
     public function getAll()
     {
         $nodes = $this->Nodes_Model->getAll();
-        echo json_encode(array('success' => true, 'nodes' => $nodes));
+        return Api_response::ok(array('nodes' => $nodes));
     }
 
     // POST /Nodes_API/create — admin only.
@@ -41,21 +41,15 @@ class Nodes_API extends MY_Controller
         $requestedId = isset($data['id']) ? trim($data['id']) : null;
 
         if (empty(trim((string) $name)) || empty($building) || $floor === null || empty(trim((string) $type))) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'name, building, floor, and type are all required.'));
-            return;
+            return Api_response::fail(400, 'name, building, floor, and type are all required.');
         }
 
         if (!$this->Buildings_Model->find($building)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => "Building '{$building}' does not exist."));
-            return;
+            return Api_response::fail(400, "Building '{$building}' does not exist.");
         }
 
         if (!empty($requestedId) && $this->Nodes_Model->idExists($requestedId)) {
-            http_response_code(409);
-            echo json_encode(array('success' => false, 'error' => "ID '{$requestedId}' is already used by another node."));
-            return;
+            return Api_response::fail(409, "ID '{$requestedId}' is already used by another node.");
         }
 
         $node = $this->Nodes_Model->create(
@@ -68,7 +62,7 @@ class Nodes_API extends MY_Controller
             isset($data['leads_to_floor']) ? $data['leads_to_floor'] : null
         );
 
-        echo json_encode(array('success' => true, 'node' => $node));
+        return Api_response::ok(array('node' => $node));
     }
 
     // PATCH /Nodes_API/rename/{oldId} — admin only.
@@ -81,18 +75,14 @@ class Nodes_API extends MY_Controller
         $newId = isset($data['new_id']) ? trim($data['new_id']) : '';
 
         if (empty($oldId) || $newId === '') {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Both the current and new id are required.'));
-            return;
+            return Api_response::fail(400, 'Both the current and new id are required.');
         }
         if ($this->Nodes_Model->idExists($newId)) {
-            http_response_code(409);
-            echo json_encode(array('success' => false, 'error' => "ID '{$newId}' is already used by another node."));
-            return;
+            return Api_response::fail(409, "ID '{$newId}' is already used by another node.");
         }
 
         $node = $this->Nodes_Model->renameNode($oldId, $newId);
-        echo json_encode(array('success' => true, 'node' => $node));
+        return Api_response::ok(array('node' => $node));
     }
 
     // PATCH /Nodes_API/update/{id} — admin only.
@@ -101,9 +91,7 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing node id.'));
-            return;
+            return Api_response::fail(400, 'Missing node id.');
         }
 
         $data = $this->getInput();
@@ -114,21 +102,17 @@ class Nodes_API extends MY_Controller
         $patch = array_intersect_key($data, array_flip($allowed));
 
         if (empty($patch)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No valid fields to update.'));
-            return;
+            return Api_response::fail(400, 'No valid fields to update.');
         }
 
         // Same check as create() — only relevant if building is
         // actually part of this particular update.
         if (isset($patch['building']) && !$this->Buildings_Model->find($patch['building'])) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => "Building '{$patch['building']}' does not exist."));
-            return;
+            return Api_response::fail(400, "Building '{$patch['building']}' does not exist.");
         }
 
         $node = $this->Nodes_Model->update($id, $patch);
-        echo json_encode(array('success' => true, 'node' => $node));
+        return Api_response::ok(array('node' => $node));
     }
 
     // DELETE /Nodes_API/delete/{id} — admin only.
@@ -137,13 +121,11 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($id)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing node id.'));
-            return;
+            return Api_response::fail(400, 'Missing node id.');
         }
 
         $this->Nodes_Model->delete($id);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /Nodes_API/addNeighbor — admin only.
@@ -156,9 +138,7 @@ class Nodes_API extends MY_Controller
         $required = array('node_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch');
         foreach ($required as $field) {
             if (!isset($data[$field])) {
-                http_response_code(400);
-                echo json_encode(array('success' => false, 'error' => "Missing field: {$field}"));
-                return;
+                return Api_response::fail(400, "Missing field: {$field}");
             }
         }
 
@@ -171,7 +151,7 @@ class Nodes_API extends MY_Controller
             $data['reverse_pitch']
         );
 
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /Nodes_API/removeNeighbor — admin only.
@@ -182,13 +162,11 @@ class Nodes_API extends MY_Controller
 
         $data = $this->getInput();
         if (empty($data['node_id']) || empty($data['neighbor_id'])) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'node_id and neighbor_id are both required.'));
-            return;
+            return Api_response::fail(400, 'node_id and neighbor_id are both required.');
         }
 
         $this->Nodes_Model->removeNeighbor($data['node_id'], $data['neighbor_id']);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // PATCH /Nodes_API/updateNeighborAngle — admin only.
@@ -201,9 +179,7 @@ class Nodes_API extends MY_Controller
         $required = array('node_id', 'neighbor_id', 'yaw', 'pitch');
         foreach ($required as $field) {
             if (!isset($data[$field])) {
-                http_response_code(400);
-                echo json_encode(array('success' => false, 'error' => "Missing field: {$field}"));
-                return;
+                return Api_response::fail(400, "Missing field: {$field}");
             }
         }
 
@@ -213,7 +189,7 @@ class Nodes_API extends MY_Controller
             $data['yaw'],
             $data['pitch']
         );
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /Nodes_API/addMarker — admin only.
@@ -226,17 +202,13 @@ class Nodes_API extends MY_Controller
         $required = array('node_id', 'type', 'label', 'yaw', 'pitch');
         foreach ($required as $field) {
             if (!isset($data[$field])) {
-                http_response_code(400);
-                echo json_encode(array('success' => false, 'error' => "Missing field: {$field}"));
-                return;
+                return Api_response::fail(400, "Missing field: {$field}");
             }
         }
 
         if (!$this->Nodes_Model->isValidMarkerType($data['type'])) {
             $allowed = implode(', ', $this->Nodes_Model->getAllowedMarkerTypes());
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => "Invalid marker type. Must be one of: {$allowed}"));
-            return;
+            return Api_response::fail(400, "Invalid marker type. Must be one of: {$allowed}");
         }
 
         $markerId = $this->Nodes_Model->addMarker(
@@ -247,7 +219,7 @@ class Nodes_API extends MY_Controller
             $data['pitch']
         );
 
-        echo json_encode(array('success' => true, 'marker_id' => $markerId));
+        return Api_response::ok(array('marker_id' => $markerId));
     }
 
     // PATCH /Nodes_API/updateMarker/{marker_id} — admin only.
@@ -256,9 +228,7 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($markerId)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing marker id.'));
-            return;
+            return Api_response::fail(400, 'Missing marker id.');
         }
 
         $data = $this->getInput();
@@ -267,19 +237,15 @@ class Nodes_API extends MY_Controller
 
         if (isset($patch['type']) && !$this->Nodes_Model->isValidMarkerType($patch['type'])) {
             $allowedTypes = implode(', ', $this->Nodes_Model->getAllowedMarkerTypes());
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => "Invalid marker type. Must be one of: {$allowedTypes}"));
-            return;
+            return Api_response::fail(400, "Invalid marker type. Must be one of: {$allowedTypes}");
         }
 
         if (empty($patch)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No valid fields to update.'));
-            return;
+            return Api_response::fail(400, 'No valid fields to update.');
         }
 
         $this->Nodes_Model->updateMarker($markerId, $patch);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // DELETE /Nodes_API/deleteMarker/{marker_id} — admin only.
@@ -288,13 +254,11 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($markerId)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing marker id.'));
-            return;
+            return Api_response::fail(400, 'Missing marker id.');
         }
 
         $this->Nodes_Model->deleteMarker($markerId);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // POST /Nodes_API/addRoom — admin only.
@@ -308,13 +272,11 @@ class Nodes_API extends MY_Controller
         $roomName = isset($data['room_name']) ? $data['room_name'] : null;
 
         if (empty($nodeId) || empty(trim((string) $roomName))) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'node_id and room_name are both required.'));
-            return;
+            return Api_response::fail(400, 'node_id and room_name are both required.');
         }
 
         $roomRowId = $this->Nodes_Model->addRoom($nodeId, $roomName);
-        echo json_encode(array('success' => true, 'room_id' => $roomRowId));
+        return Api_response::ok(array('room_id' => $roomRowId));
     }
 
     // DELETE /Nodes_API/removeRoom/{room_row_id} — admin only.
@@ -323,12 +285,10 @@ class Nodes_API extends MY_Controller
         $this->requireAdmin();
 
         if (empty($roomRowId)) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Missing room id.'));
-            return;
+            return Api_response::fail(400, 'Missing room id.');
         }
 
         $this->Nodes_Model->removeRoom($roomRowId);
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 }
