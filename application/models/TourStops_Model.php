@@ -1,6 +1,8 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
+require_once APPPATH . 'libraries/Neighbor_links.php';
+
 // Mirrors useGraphCollection.js's tourStops behavior — same slug-based
 // id generation as TourSections_Model, plus the bidirectional
 // neighbor-link and marker/photo management that tour_sections never
@@ -62,26 +64,18 @@ class TourStops_Model extends CI_Model
         return $this->db->get()->result_array();
     }
 
+    // The edge table and its owner column are the only things that differ
+    // from Nodes_Model's neighbour links — see Neighbor_links.
+    private function neighborLinks()
+    {
+        return new Neighbor_links($this->db, 'tour_stop_neighbors', 'tour_stop_id');
+    }
+
     // Optionally scoped to a single stop_id (used by find()) — otherwise
     // fetches every edge in one query and groups in PHP.
     private function _getNeighborsGrouped($onlyStopId = null)
     {
-        $this->db->select('*');
-        $this->db->from('tour_stop_neighbors');
-        if ($onlyStopId !== null) {
-            $this->db->where('tour_stop_id', $onlyStopId);
-        }
-        $rows = $this->db->get()->result_array();
-
-        $grouped = array();
-        foreach ($rows as $row) {
-            $grouped[$row['tour_stop_id']][] = array(
-                'neighbor_id' => $row['neighbor_id'],
-                'yaw' => $row['yaw'],
-                'pitch' => $row['pitch'],
-            );
-        }
-        return $grouped;
+        return $this->neighborLinks()->groupedByOwner($onlyStopId);
     }
 
     private function _getMarkersGrouped($onlyStopId = null)
@@ -241,53 +235,24 @@ class TourStops_Model extends CI_Model
 
     // ---------- Neighbor links (bidirectional) ----------
 
-    // Mirrors useGraphCollection.js's own link behavior — a "connect A
-    // and B" action always writes BOTH directions in one call, each
-    // with its own yaw/pitch, since the hotspot angle genuinely differs
-    // depending on which way you're walking.
+    // A "connect A and B" action always writes BOTH directions in one
+    // call, each with its own yaw/pitch — see Neighbor_links::link.
     public function addNeighbor($stopId, $neighborId, $yaw, $pitch, $reverseYaw, $reversePitch)
     {
-        $this->db->insert('tour_stop_neighbors', array(
-            'tour_stop_id' => $stopId,
-            'neighbor_id' => $neighborId,
-            'yaw' => $yaw,
-            'pitch' => $pitch,
-        ));
-        $this->db->insert('tour_stop_neighbors', array(
-            'tour_stop_id' => $neighborId,
-            'neighbor_id' => $stopId,
-            'yaw' => $reverseYaw,
-            'pitch' => $reversePitch,
-        ));
+        $this->neighborLinks()->link($stopId, $neighborId, $yaw, $pitch, $reverseYaw, $reversePitch);
     }
 
     public function removeNeighbor($stopId, $neighborId)
     {
-        $this->db->where('tour_stop_id', $stopId);
-        $this->db->where('neighbor_id', $neighborId);
-        $this->db->delete('tour_stop_neighbors');
-
-        $this->db->where('tour_stop_id', $neighborId);
-        $this->db->where('neighbor_id', $stopId);
-        $this->db->delete('tour_stop_neighbors');
+        $this->neighborLinks()->unlink($stopId, $neighborId);
     }
 
     // Updates ONE existing edge's angle only — the direction FROM
-    // stopId TOWARD neighborId — without touching the reverse direction
-    // at all. This is what setHotspot() in the original hook actually
-    // needs: a link gets added first (addNeighbor, often with
-    // placeholder angles), then its real angle gets set independently,
-    // per direction, once the admin actually places it on the panorama.
-    // addNeighbor() alone can't do this — it always writes both new rows
-    // atomically; this updates one that already exists.
+    // stopId TOWARD neighborId. See Neighbor_links::setAngle for why
+    // addNeighbor() alone can't do this.
     public function updateNeighborAngle($stopId, $neighborId, $yaw, $pitch)
     {
-        $this->db->where('tour_stop_id', $stopId);
-        $this->db->where('neighbor_id', $neighborId);
-        return $this->db->update('tour_stop_neighbors', array(
-            'yaw' => $yaw,
-            'pitch' => $pitch,
-        ));
+        return $this->neighborLinks()->setAngle($stopId, $neighborId, $yaw, $pitch);
     }
 
     // ---------- Equipment markers ----------

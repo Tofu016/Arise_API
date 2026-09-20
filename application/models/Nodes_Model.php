@@ -1,6 +1,8 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
+require_once APPPATH . 'libraries/Neighbor_links.php';
+
 // The most complex resource — same bidirectional neighbor-link pattern
 // as TourStops_Model, plus:
 //  - a REQUIRED (not optional) foreign key into buildings
@@ -79,24 +81,16 @@ class Nodes_Model extends CI_Model
         return $this->db->get()->result_array();
     }
 
+    // The edge table and its owner column are the only things that differ
+    // from TourStops_Model's neighbour links — see Neighbor_links.
+    private function neighborLinks()
+    {
+        return new Neighbor_links($this->db, 'node_neighbors', 'node_id');
+    }
+
     private function _getNeighborsGrouped($onlyNodeId = null)
     {
-        $this->db->select('*');
-        $this->db->from('node_neighbors');
-        if ($onlyNodeId !== null) {
-            $this->db->where('node_id', $onlyNodeId);
-        }
-        $rows = $this->db->get()->result_array();
-
-        $grouped = array();
-        foreach ($rows as $row) {
-            $grouped[$row['node_id']][] = array(
-                'neighbor_id' => $row['neighbor_id'],
-                'yaw' => $row['yaw'],
-                'pitch' => $row['pitch'],
-            );
-        }
-        return $grouped;
+        return $this->neighborLinks()->groupedByOwner($onlyNodeId);
     }
 
     private function _getMarkersGrouped($onlyNodeId = null)
@@ -240,44 +234,19 @@ class Nodes_Model extends CI_Model
 
     public function addNeighbor($nodeId, $neighborId, $yaw, $pitch, $reverseYaw, $reversePitch)
     {
-        $this->db->insert('node_neighbors', array(
-            'node_id' => $nodeId,
-            'neighbor_id' => $neighborId,
-            'yaw' => $yaw,
-            'pitch' => $pitch,
-        ));
-        $this->db->insert('node_neighbors', array(
-            'node_id' => $neighborId,
-            'neighbor_id' => $nodeId,
-            'yaw' => $reverseYaw,
-            'pitch' => $reversePitch,
-        ));
+        $this->neighborLinks()->link($nodeId, $neighborId, $yaw, $pitch, $reverseYaw, $reversePitch);
     }
 
     public function removeNeighbor($nodeId, $neighborId)
     {
-        $this->db->where('node_id', $nodeId);
-        $this->db->where('neighbor_id', $neighborId);
-        $this->db->delete('node_neighbors');
-
-        $this->db->where('node_id', $neighborId);
-        $this->db->where('neighbor_id', $nodeId);
-        $this->db->delete('node_neighbors');
+        $this->neighborLinks()->unlink($nodeId, $neighborId);
     }
 
     // Updates ONE existing edge's angle only — see
-    // TourStops_Model::updateNeighborAngle for the full reasoning
-    // (addNeighbor() alone always writes both new rows atomically; this
-    // updates one that already exists, matching setHotspot()'s real
-    // per-direction semantics).
+    // Neighbor_links::setAngle for the full reasoning.
     public function updateNeighborAngle($nodeId, $neighborId, $yaw, $pitch)
     {
-        $this->db->where('node_id', $nodeId);
-        $this->db->where('neighbor_id', $neighborId);
-        return $this->db->update('node_neighbors', array(
-            'yaw' => $yaw,
-            'pitch' => $pitch,
-        ));
+        return $this->neighborLinks()->setAngle($nodeId, $neighborId, $yaw, $pitch);
     }
 
     // ---------- Markers (room / facility / exit / hydrant — no photos) ----------
