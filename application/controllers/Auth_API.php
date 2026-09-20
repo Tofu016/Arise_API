@@ -42,12 +42,7 @@ class Auth_API extends MY_Controller
 
         return Api_response::ok(array(
             'token' => $token,
-            'user' => array(
-                'id' => $user['id'],
-                'email' => $user['email'],
-                'name' => $user['name'],
-                'role' => $user['role'],
-            ),
+            'user' => $this->clientUser($user),
         ));
     }
 
@@ -65,12 +60,7 @@ class Auth_API extends MY_Controller
 
         $user = $this->getCurrentUser();
         return Api_response::ok(array(
-            'user' => array(
-                'id' => $user['id'],
-                'email' => $user['email'],
-                'name' => $user['name'],
-                'role' => $user['role'],
-            ),
+            'user' => $this->clientUser($user),
         ));
     }
 
@@ -79,11 +69,10 @@ class Auth_API extends MY_Controller
     // header, same as every other authenticated request.
     public function logout()
     {
-        $header = $this->input->get_request_header('Authorization');
-        if (empty($header) || stripos($header, 'Bearer ') !== 0) {
+        $token = Auth_session::tokenFrom($this->input->get_request_header('Authorization'));
+        if ($token === null) {
             return Api_response::fail(400, 'No token provided.');
         }
-        $token = trim(substr($header, 7));
         $this->Auth_Model->deleteToken($token);
         return Api_response::ok();
     }
@@ -125,12 +114,7 @@ class Auth_API extends MY_Controller
 
         return Api_response::ok(array(
             'token' => $token,
-            'user' => array(
-                'id' => $user['id'],
-                'email' => $user['email'],
-                'name' => $user['name'],
-                'role' => $user['role'],
-            ),
+            'user' => $this->clientUser($user),
         ));
     }
 
@@ -192,5 +176,18 @@ class Auth_API extends MY_Controller
         $this->Auth_Model->deleteAllTokensForUser($userId);
 
         return Api_response::ok();
+    }
+
+    // The user as the client sees it after login, register and /me: an
+    // allow-list of exactly these four fields, so nothing else on the row
+    // (above all the password hash) can ever reach a response.
+    private function clientUser($user)
+    {
+        return array(
+            'id' => $user['id'],
+            'email' => $user['email'],
+            'name' => $user['name'],
+            'role' => $user['role'],
+        );
     }
 }

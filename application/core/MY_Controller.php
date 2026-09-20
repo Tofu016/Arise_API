@@ -5,6 +5,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // and an exception class, and is never instantiated as a library.
 require_once APPPATH . 'libraries/Api_response.php';
 require_once APPPATH . 'libraries/Api_input.php';
+require_once APPPATH . 'libraries/Auth_session.php';
 
 // Shared base every API controller should extend instead of
 // CI_Controller directly — CodeIgniter 3's own, documented extension
@@ -13,10 +14,9 @@ require_once APPPATH . 'libraries/Api_input.php';
 // = 'MY_'). Consolidates three things every controller previously
 // duplicated on its own (see TourSections_API's original version):
 // CORS + OPTIONS preflight handling, JSON/form-body parsing, and now
-// the actual permission checks — isAdmin()/isApproved() — mirroring
-// the isAdmin()/isApproved() helper functions from the original
-// Firestore security rules, just checked here instead of inside the
-// database itself.
+// the actual permission check — isAdmin() — mirroring the isAdmin()
+// helper function from the original Firestore security rules, just
+// checked here instead of inside the database itself.
 class MY_Controller extends CI_Controller
 {
     // Which website is allowed to call this API (CORS). Env-driven so
@@ -25,8 +25,8 @@ class MY_Controller extends CI_Controller
     private $allowedOrigin;
 
     // Cached after the first check within a single request, so
-    // repeated isAdmin()/isApproved() calls in the same request don't
-    // each re-validate the token against the database.
+    // repeated isAdmin() calls in the same request don't each
+    // re-validate the token against the database.
     private $currentUser = null;
     private $currentUserChecked = false;
 
@@ -65,14 +65,14 @@ class MY_Controller extends CI_Controller
         return $this->input->post() ?: array();
     }
 
-    // Pulls the bearer token from the Authorization header and
-    // validates it via Auth_Model — returns the associated user's row
-    // (with role) if genuinely valid, or null otherwise. Protected, not
-    // public — controllers should use isAdmin()/isApproved()/
-    // requireAdmin()/requireApproved() below rather than reaching in
-    // here directly, same as the original Firestore rules never exposed
-    // "the current auth token" itself, only the derived signedIn()/
-    // isAdmin()/isApproved() checks built on top of it.
+    // Identifies the caller from the Authorization header (see
+    // Auth_session) and validates the token via Auth_Model — returns the
+    // associated user's row (with role) if genuinely valid, or null
+    // otherwise. Protected, not public — controllers should use
+    // isAdmin()/requireAdmin() below rather than reaching in here
+    // directly, same as the original Firestore rules never exposed "the
+    // current auth token" itself, only the derived signedIn()/isAdmin()
+    // checks built on top of it.
     protected function getCurrentUser()
     {
         if ($this->currentUserChecked) {
@@ -80,13 +80,10 @@ class MY_Controller extends CI_Controller
         }
         $this->currentUserChecked = true;
 
-        $header = $this->input->get_request_header('Authorization');
-        if (empty($header) || stripos($header, 'Bearer ') !== 0) {
-            $this->currentUser = null;
-            return null;
-        }
-        $token = trim(substr($header, 7));
-        $this->currentUser = $this->Auth_Model->validateToken($token) ?: null;
+        $this->currentUser = Auth_session::userFor(
+            $this->input->get_request_header('Authorization'),
+            array($this->Auth_Model, 'validateToken')
+        );
         return $this->currentUser;
     }
 
@@ -103,13 +100,6 @@ class MY_Controller extends CI_Controller
         return $user !== null && $user['role'] === 'admin';
     }
 
-    // Mirrors isApproved() from the original Firestore rules.
-    protected function isApproved()
-    {
-        $user = $this->getCurrentUser();
-        return $user !== null && in_array($user['role'], array('user', 'admin'), true);
-    }
-
     // Call at the top of any method that should be admin-only — stops
     // the action with a 401/403 reply if the check fails, same shape as
     // how the original Firestore rules simply refused a query outright
@@ -123,18 +113,6 @@ class MY_Controller extends CI_Controller
         }
         if (!$this->isAdmin()) {
             throw new Api_abort(Api_response::fail(403, 'Admin access required.'));
-        }
-    }
-
-    // Call at the top of any method that requires a genuinely approved
-    // (not just "pending") account.
-    protected function requireApproved()
-    {
-        if (!$this->signedIn()) {
-            throw new Api_abort(Api_response::fail(401, 'Not signed in.'));
-        }
-        if (!$this->isApproved()) {
-            throw new Api_abort(Api_response::fail(403, 'Account not yet approved.'));
         }
     }
 

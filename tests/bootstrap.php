@@ -11,6 +11,7 @@ require_once APPPATH . 'libraries/Api_response.php';
 require_once APPPATH . 'libraries/Photo_references.php';
 require_once APPPATH . 'libraries/Api_input.php';
 require_once APPPATH . 'libraries/Account_policy.php';
+require_once APPPATH . 'libraries/Auth_session.php';
 require_once APPPATH . 'libraries/Neighbor_links.php';
 require_once APPPATH . 'libraries/Account_mail.php';
 require_once APPPATH . 'libraries/Smtp_mailer.php';

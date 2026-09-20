@@ -23,12 +23,6 @@ class ApiTestController extends MY_Controller
         return Api_response::ok(array('secret' => 1));
     }
 
-    public function approvedOnly()
-    {
-        $this->requireApproved();
-        return Api_response::ok();
-    }
-
     public function withParam($id)
     {
         return Api_response::ok(array('id' => $id));
@@ -219,36 +213,6 @@ class ApiResponseTest extends TestCase
 
         $this->assertSame(200, $r->status());
         $this->assertSame(1, $r->body()['secret']);
-    }
-
-    public function testApprovedOnlyRefusesAPendingAccountWith403()
-    {
-        $c = new ApiTestController();
-        $c->user = array('role' => 'pending');
-
-        $r = $this->replyOf($c, 'approvedOnly');
-
-        $this->assertSame(403, $r->status());
-        $this->assertSame('Account not yet approved.', $r->body()['error']);
-    }
-
-    public function testApprovedOnlyRefusesAnonymousWith401()
-    {
-        $this->assertSame(401, $this->replyOf(new ApiTestController(), 'approvedOnly')->status());
-    }
-
-    /** @dataProvider approvedRoles */
-    public function testApprovedOnlyAcceptsUsersAndAdmins($role)
-    {
-        $c = new ApiTestController();
-        $c->user = array('role' => $role);
-
-        $this->assertSame(200, $this->replyOf($c, 'approvedOnly')->status());
-    }
-
-    public function approvedRoles()
-    {
-        return array(array('user'), array('admin'));
     }
 
     // ---- _remap: the whole path a request takes -------------------

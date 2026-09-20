@@ -7,7 +7,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // via .htaccess — a genuinely unreachable location is a stronger
 // guarantee than a rule that has to stay correctly configured.
 //
-// Viewing used to require requireApproved() on serve() below, matching
+// Viewing used to require an approved account on serve() below, matching
 // MainPage.jsx being login-gated. Now that MainPage is genuinely public
 // (no RequireAuth wrapper — see App.jsx), that check has been removed
 // entirely here too. Uploading stays admin-only regardless — visitors
