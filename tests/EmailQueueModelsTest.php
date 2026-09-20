@@ -14,7 +14,7 @@ class EmailQueueModelsTest extends TestCase
         return $model;
     }
 
-    public function testItReadsUnsentRowsOldestFirstWithABatchLimit()
+    public function testItReadsUnsentRowsFreshestFirstThenOldestWithABatchLimit()
     {
         $model = $this->model();
 
@@ -24,6 +24,7 @@ class EmailQueueModelsTest extends TestCase
             array('select', '*'),
             array('from', 'email_queue'),
             array('where', 'sent_at', null),
+            array('order_by', 'attempts', 'ASC'),
             array('order_by', 'created_at', 'ASC'),
             array('limit', 20),
             array('get', 'email_queue'),
