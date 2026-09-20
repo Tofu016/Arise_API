@@ -10,6 +10,7 @@ require_once APPPATH . 'libraries/Photo_store.php';
 require_once APPPATH . 'libraries/Api_response.php';
 require_once APPPATH . 'libraries/Photo_references.php';
 require_once APPPATH . 'libraries/Api_input.php';
+require_once APPPATH . 'libraries/Account_policy.php';
 
 // MY_Controller extends CI_Controller and calls show_404(). Stubbed so its
 // own guard and dispatch code can be tested without booting the framework;

@@ -1,6 +1,8 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
+require_once APPPATH . 'libraries/Account_policy.php';
+
 // Login, logout, registration, and password reset. Auth_Model's
 // underlying checks (verifyCredentials, register, etc.) work against
 // our own users table as the current working assumption — if the
@@ -99,17 +101,8 @@ class Auth_API extends MY_Controller
             return Api_response::fail(400, 'Email, password, and name are all required.');
         }
 
-        // Same rule as the original enforceEmailDomain blocking trigger —
-        // substr/strlen rather than str_ends_with(), which is PHP 8.0+
-        // only and this runs on PHP 7.4.
-        $requiredDomain = '@sdca.edu.ph';
-        if (substr($email, -strlen($requiredDomain)) !== $requiredDomain) {
-            return Api_response::fail(403, 'Registration is only open to @sdca.edu.ph email addresses.');
-        }
-
-        if (strlen($password) < 8) {
-            return Api_response::fail(400, 'Password must be at least 8 characters.');
-        }
+        Account_policy::requireEmailDomain($email);
+        Account_policy::requirePassword($password);
 
         if ($this->Auth_Model->emailExists($email)) {
             return Api_response::fail(409, 'An account with this email already exists.');
@@ -193,9 +186,7 @@ class Auth_API extends MY_Controller
             return Api_response::fail(400, 'Token and new password are required.');
         }
 
-        if (strlen($password) < 8) {
-            return Api_response::fail(400, 'Password must be at least 8 characters.');
-        }
+        Account_policy::requirePassword($password);
 
         $userId = $this->Auth_Model->validatePasswordResetToken($token);
         if (!$userId) {
