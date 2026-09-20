@@ -52,17 +52,11 @@ class TourSections_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing section id.');
-        }
+        Api_input::requireId($id, 'section');
 
         $data = $this->getInput();
         $allowed = array('label', 'cover_photo_path');
-        $patch = array_intersect_key($data, array_flip($allowed));
-
-        if (empty($patch)) {
-            return Api_response::fail(400, 'No valid fields to update.');
-        }
+        $patch = Api_input::patch($data, $allowed);
 
         $section = $this->TourSections_Model->update($id, $patch);
         return Api_response::ok(array('section' => $section));
@@ -73,9 +67,7 @@ class TourSections_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing section id.');
-        }
+        Api_input::requireId($id, 'section');
 
         $this->TourSections_Model->delete($id);
         return Api_response::ok();

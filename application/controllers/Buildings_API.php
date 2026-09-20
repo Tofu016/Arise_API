@@ -53,17 +53,11 @@ class Buildings_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing building id.');
-        }
+        Api_input::requireId($id, 'building');
 
         $data = $this->getInput();
         $allowed = array('name', 'floor_count', 'lat', 'lng');
-        $patch = array_intersect_key($data, array_flip($allowed));
-
-        if (empty($patch)) {
-            return Api_response::fail(400, 'No valid fields to update.');
-        }
+        $patch = Api_input::patch($data, $allowed);
 
         $building = $this->Buildings_Model->update($id, $patch);
         return Api_response::ok(array('building' => $building));
@@ -74,9 +68,7 @@ class Buildings_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing building id.');
-        }
+        Api_input::requireId($id, 'building');
 
         if ($this->Buildings_Model->hasNodes($id)) {
             return Api_response::fail(409, 'This building still has nodes assigned to it. Reassign or delete those nodes first.');

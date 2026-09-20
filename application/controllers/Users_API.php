@@ -33,9 +33,7 @@ class Users_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing user id.');
-        }
+        Api_input::requireId($id, 'user');
 
         $data = $this->getInput();
         $newRole = isset($data['role']) ? $data['role'] : null;
@@ -70,9 +68,7 @@ class Users_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing user id.');
-        }
+        Api_input::requireId($id, 'user');
 
         // Same safeguard as the original deleteUserAccount Cloud
         // Function — an admin should never be able to lock themselves

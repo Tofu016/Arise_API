@@ -52,9 +52,7 @@ class PlacardDialogs_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing dialog id.');
-        }
+        Api_input::requireId($id, 'dialog');
 
         $data = $this->getInput();
 
@@ -69,12 +67,9 @@ class PlacardDialogs_API extends MY_Controller
         }
 
         $allowed = array('room_name', 'description', 'department', 'use', 'photo_path', 'photo_360_path', 'link');
-        $patch = array_intersect_key($data, array_flip($allowed));
         $searchTerms = (isset($data['search_terms']) && is_array($data['search_terms'])) ? $data['search_terms'] : null;
-
-        if (empty($patch) && $searchTerms === null) {
-            return Api_response::fail(400, 'No valid fields to update.');
-        }
+        // A body carrying only search_terms is still a change.
+        $patch = Api_input::patch($data, $allowed, $searchTerms !== null);
 
         $dialog = $this->PlacardDialogs_Model->update($id, $patch, $searchTerms);
         return Api_response::ok(array('dialog' => $dialog));
@@ -85,9 +80,7 @@ class PlacardDialogs_API extends MY_Controller
     {
         $this->requireAdmin();
 
-        if (empty($id)) {
-            return Api_response::fail(400, 'Missing dialog id.');
-        }
+        Api_input::requireId($id, 'dialog');
 
         $this->PlacardDialogs_Model->delete($id);
         return Api_response::ok();
