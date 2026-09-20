@@ -2,7 +2,7 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 // Admin photo gallery — lists every Photo the Photo store holds and
-// cross-references each against every table that can reference a photo,
+// cross-references each against the Photo columns (see Photo_references),
 // so the admin panel can show which files are genuinely in use versus
 // orphaned. Deletion (admin-only, like everything else here) only ever
 // removes files confirmed orphaned by this same check — never something
@@ -10,34 +10,19 @@ defined('BASEPATH') or exit('No direct script access allowed');
 class Photos_API extends MY_Controller
 {
     // Every path currently referenced anywhere in the database, exactly
-    // as stored (e.g. "panoramas/gd1/somefile.webp") — this is the
-    // definitive "in use" set every listed photo gets checked against.
-    // Confirmed against the real, current schema.sql directly rather
-    // than assumed from memory, specifically because getting this list
-    // wrong here would mean a still-in-use photo could be incorrectly
-    // offered for deletion.
+    // as stored (e.g. "panoramas/gd1/somefile.webp") — the definitive
+    // "in use" set every listed photo gets checked against. Read fresh
+    // on every call, deliberately: see delete().
     private function getReferencedPaths()
     {
-        $referenced = array();
-
-        foreach ($this->db->select('photo_path')->get('nodes')->result_array() as $row) {
-            if (!empty($row['photo_path'])) $referenced[$row['photo_path']] = true;
+        if (!isset($this->photo_references)) {
+            $this->load->library('Photo_references', array(
+                'reader' => function ($table, array $columns) {
+                    return $this->db->select(implode(', ', $columns))->get($table)->result_array();
+                },
+            ));
         }
-        foreach ($this->db->select('photo_path')->get('tour_stops')->result_array() as $row) {
-            if (!empty($row['photo_path'])) $referenced[$row['photo_path']] = true;
-        }
-        foreach ($this->db->select('photo_path, photo_360_path')->get('placard_dialogs')->result_array() as $row) {
-            if (!empty($row['photo_path'])) $referenced[$row['photo_path']] = true;
-            if (!empty($row['photo_360_path'])) $referenced[$row['photo_360_path']] = true;
-        }
-        foreach ($this->db->select('cover_photo_path')->get('tour_sections')->result_array() as $row) {
-            if (!empty($row['cover_photo_path'])) $referenced[$row['cover_photo_path']] = true;
-        }
-        foreach ($this->db->select('photo_path')->get('tour_stop_marker_photos')->result_array() as $row) {
-            if (!empty($row['photo_path'])) $referenced[$row['photo_path']] = true;
-        }
-
-        return $referenced;
+        return $this->photo_references->referencedPaths();
     }
 
     // GET /Photos_API/getAll — admin only.
