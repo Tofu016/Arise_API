@@ -48,6 +48,18 @@ class Users_API extends MY_Controller
             return Api_response::fail(404, 'User not found.');
         }
 
+        // Two ways an admin could lock everyone out of admin access: by
+        // demoting themselves, or by demoting the only admin left.
+        if ($existing['role'] === 'admin' && $newRole !== 'admin') {
+            $currentUser = $this->getCurrentUser();
+            if ($currentUser !== null && (string) $currentUser['id'] === (string) $id) {
+                return Api_response::fail(400, 'You cannot remove your own admin access.');
+            }
+            if ($this->Users_Model->countAdmins() <= 1) {
+                return Api_response::fail(400, 'You cannot remove the last admin.');
+            }
+        }
+
         $wasApproved = $existing['role'] === 'pending' && $newRole !== 'pending';
 
         $user = $this->Users_Model->updateRole($id, $newRole);

@@ -42,4 +42,52 @@ class UsersActionsTest extends ActionTestCase
         $this->assertSame('enqueue', $this->controller->Email_Model->calls[0][0]);
         $this->assertSame('a@sdca.edu.ph', $this->controller->Email_Model->calls[0][1][0]);
     }
+
+    private function demote($id, $countAdmins)
+    {
+        return $this->call('UsersApiHarness', 'updateRole', array($id), array('role' => 'user'), array('Users_Model' => array(
+            'isValidRole' => true,
+            'find' => array('role' => 'admin'),
+            'countAdmins' => $countAdmins,
+            'updateRole' => array('email' => 'a@sdca.edu.ph', 'name' => 'Ana'),
+        )));
+    }
+
+    public function testAnAdminCannotDemoteThemselves()
+    {
+        // The signed-in admin is user 1.
+        $this->assertReply($this->demote('1', 3), 400, 'You cannot remove your own admin access.');
+        $this->assertSame(array(), $this->writes('updateRole'));
+    }
+
+    public function testTheLastAdminCannotBeDemoted()
+    {
+        $this->assertReply($this->demote('2', 1), 400, 'You cannot remove the last admin.');
+        $this->assertSame(array(), $this->writes('updateRole'));
+    }
+
+    public function testAnAdminCanBeDemotedWhileAnotherRemains()
+    {
+        $this->assertReply($this->demote('2', 2), 200);
+        $this->assertCount(1, $this->writes('updateRole'));
+    }
+
+    public function testKeepingYourOwnAdminRoleIsNotADemotion()
+    {
+        $reply = $this->call('UsersApiHarness', 'updateRole', array('1'), array('role' => 'admin'), array('Users_Model' => array(
+            'isValidRole' => true,
+            'find' => array('role' => 'admin'),
+            'countAdmins' => 1,
+            'updateRole' => array('email' => 'a@sdca.edu.ph', 'name' => 'Ana'),
+        )));
+
+        $this->assertReply($reply, 200);
+    }
+
+    private function writes($method)
+    {
+        return array_values(array_filter($this->controller->Users_Model->calls, function ($call) use ($method) {
+            return $call[0] === $method;
+        }));
+    }
 }

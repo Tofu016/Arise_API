@@ -91,4 +91,17 @@ class Email_Model extends CI_Model
             'sent_at' => date('Y-m-d H:i:s'),
         ));
     }
+
+    // Deletes emails that were sent more than $days days ago, so the queue
+    // does not keep every message ever sent. Only sent rows go: an email
+    // still waiting has a NULL sent_at, which never compares as older than
+    // the cutoff, so a failing email is kept for diagnosis (see the
+    // attempts / last_error query in DEPLOY.md). Returns the rows deleted.
+    public function purgeSent($days = 30)
+    {
+        $cutoff = date('Y-m-d H:i:s', strtotime('-' . (int) $days . ' days'));
+        $this->db->where('sent_at <', $cutoff);
+        $this->db->delete('email_queue');
+        return $this->db->affected_rows();
+    }
 }

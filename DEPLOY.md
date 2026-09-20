@@ -267,6 +267,19 @@ A row for a bad address will never succeed; delete it once you have looked
 (`DELETE FROM email_queue WHERE id = <id>`). Resetting `attempts` to 0 puts
 one back at the front of the queue.
 
+### A10b. Cron — housekeeping
+
+`Cron_API::purgeExpired` deletes expired login and password-reset tokens
+and emails sent more than 30 days ago. It never touches an unsent email.
+CLI-only, like `processEmails`. Once a day is plenty:
+
+```cron
+10 3 * * * cd /var/www/arise-api && /usr/bin/php index.php Cron_API purgeExpired >> /var/log/arise-cron.log 2>&1
+```
+
+Test once by hand: `php index.php Cron_API purgeExpired` →
+`Purged: 0 login tokens, 0 reset tokens, 0 sent emails.`
+
 ### A11. HTTPS
 
 Get a certificate before going live — the PWA service worker and any

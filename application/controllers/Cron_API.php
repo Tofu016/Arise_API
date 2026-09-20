@@ -14,6 +14,10 @@ require_once APPPATH . 'libraries/Smtp_mailer.php';
 // populated for CLI just as for HTTP.
 class Cron_API extends CI_Controller
 {
+    // How long a sent email stays in email_queue before purgeExpired()
+    // deletes it.
+    const SENT_EMAIL_DAYS = 30;
+
     public function __construct()
     {
         parent::__construct();
@@ -49,5 +53,23 @@ class Cron_API extends CI_Controller
         }
 
         echo 'Processed: ' . count($result['sent']) . ' sent, ' . count($result['failed']) . " failed.\n";
+    }
+
+    // Housekeeping: deletes what has outlived its use — expired login and
+    // password-reset tokens, and emails sent more than SENT_EMAIL_DAYS ago.
+    // Nothing here changes what the API accepts (expired tokens are already
+    // refused), so it is safe to run at any time and as often as wanted;
+    // daily is plenty. Same CLI-only guard as processEmails.
+    public function purgeExpired()
+    {
+        $this->load->model('Auth_Model');
+
+        $tokens = $this->Auth_Model->purgeExpiredTokens();
+        $emails = $this->Email_Model->purgeSent(self::SENT_EMAIL_DAYS);
+
+        echo 'Purged: ' . $tokens['auth_tokens'] . ' login tokens, '
+            . $tokens['password_resets'] . ' reset tokens, '
+            . $emails . " sent emails.
+";
     }
 }

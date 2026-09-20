@@ -45,6 +45,12 @@ class Users_Model extends CI_Model
         return $this->db->get()->row_array();
     }
 
+    public function countAdmins()
+    {
+        $this->db->where('role', 'admin');
+        return (int) $this->db->count_all_results('users');
+    }
+
     public function updateRole($id, $newRole)
     {
         $this->db->where('id', $id);

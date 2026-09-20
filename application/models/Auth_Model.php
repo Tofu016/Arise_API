@@ -216,4 +216,25 @@ class Auth_Model extends CI_Model
         $this->db->where('user_id', $userId);
         return $this->db->delete('auth_tokens');
     }
+
+    // ---------- Housekeeping ----------
+
+    // Deletes login tokens and password-reset tokens that have expired.
+    // validateToken() and validatePasswordResetToken() already refuse
+    // them, so this changes no behaviour — it only stops the two tables
+    // growing forever. Returns how many rows went from each:
+    //   array('auth_tokens' => int, 'password_resets' => int).
+    public function purgeExpiredTokens()
+    {
+        $now = date('Y-m-d H:i:s');
+        $purged = array();
+
+        foreach (array('auth_tokens', 'password_resets') as $table) {
+            $this->db->where('expires_at <', $now);
+            $this->db->delete($table);
+            $purged[$table] = $this->db->affected_rows();
+        }
+
+        return $purged;
+    }
 }

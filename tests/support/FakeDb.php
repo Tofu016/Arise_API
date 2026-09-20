@@ -2,9 +2,11 @@
 // Stands in for CodeIgniter's query builder on a model. Records every call
 // in order, and behaves like a small in-memory database for the calls the
 // models use: $tables maps a table name to its rows; reads honour pending
-// where() equalities, order_by() and limit(); update() applies its data
+// where() conditions, order_by() and limit(); update() applies its data
 // (and any set() values, including "column + N" increments) to the rows the
-// pending where() equalities match.
+// pending where() conditions match; delete() removes them. A where() key
+// may carry a comparison ("expires_at <"), which — like SQL — never matches
+// a NULL column.
 class FakeDb
 {
     public $log = array();
@@ -15,6 +17,7 @@ class FakeDb
     private $orders = array();
     private $sets = array();
     private $limit = null;
+    private $affected = 0;
 
     public function select($columns = '*')
     {
@@ -115,8 +118,23 @@ class FakeDb
     public function delete($table)
     {
         $this->log[] = array('delete', $table);
+
+        $matching = $this->matchingIndexes($table);
+        foreach ($matching as $i) {
+            unset($this->tables[$table][$i]);
+        }
+        if ($matching) {
+            $this->tables[$table] = array_values($this->tables[$table]);
+        }
+        $this->affected = count($matching);
         $this->reset();
         return true;
+    }
+
+    // Rows removed by the last delete(), like CI's affected_rows().
+    public function affected_rows()
+    {
+        return $this->affected;
     }
 
     public function insert_id()
@@ -131,8 +149,7 @@ class FakeDb
         foreach (isset($this->tables[$table]) ? $this->tables[$table] : array() as $i => $row) {
             $matches = true;
             foreach ($this->wheres as $where) {
-                // A null value matches a null column, like SQL's IS NULL.
-                if (!array_key_exists($where[0], $row) || $row[$where[0]] !== $where[1]) {
+                if (!$this->satisfies($row, $where[0], $where[1])) {
                     $matches = false;
                     break;
                 }
@@ -142,6 +159,38 @@ class FakeDb
             }
         }
         return $indexes;
+    }
+
+    // One where() against one row. A bare key is an equality (a null value
+    // matches a null column, like SQL's IS NULL); "key <", "key >" and the
+    // like compare, and never match a NULL column.
+    private function satisfies(array $row, $key, $value)
+    {
+        preg_match('/^(\w+)\s*(<=|>=|<|>|!=)?$/', $key, $m);
+        $column = $m[1];
+        $operator = isset($m[2]) ? $m[2] : '';
+
+        if (!array_key_exists($column, $row)) {
+            return false;
+        }
+        if ($operator === '') {
+            return $row[$column] === $value;
+        }
+        if ($row[$column] === null) {
+            return false;
+        }
+        switch ($operator) {
+            case '<':
+                return $row[$column] < $value;
+            case '<=':
+                return $row[$column] <= $value;
+            case '>':
+                return $row[$column] > $value;
+            case '>=':
+                return $row[$column] >= $value;
+            default:
+                return $row[$column] != $value;
+        }
     }
 
     // A stable sort by the pending order_by() keys, in the order given.
