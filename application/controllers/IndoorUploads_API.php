@@ -2,10 +2,10 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 // Handles indoor content — room photos, room 360s, and node panoramas.
-// Files are stored OUTSIDE htdocs entirely (two levels above this
-// project's own root — see $protectedRoot below), not just blocked via
-// .htaccess — a genuinely unreachable location is a stronger guarantee
-// than a rule that has to stay correctly configured.
+// Files are stored by the Photo store under its protected root, OUTSIDE
+// htdocs entirely (see MY_Controller::photoStore()), not just blocked
+// via .htaccess — a genuinely unreachable location is a stronger
+// guarantee than a rule that has to stay correctly configured.
 //
 // Viewing used to require requireApproved() on serve() below, matching
 // MainPage.jsx being login-gated. Now that MainPage is genuinely public
@@ -14,130 +14,9 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // can view, only admins can add or change what's shown.
 class IndoorUploads_API extends MY_Controller
 {
-    private $protectedRoot;
-
-    public function __construct()
-    {
-        parent::__construct();
-        // FCPATH is this project's own root (where index.php lives, e.g.
-        // .../htdocs/Arise_API/) — going up two levels lands outside
-        // htdocs entirely (.../htdocs/'s own parent), genuinely
-        // unreachable by any web request regardless of Apache config.
-        $this->protectedRoot = dirname(FCPATH, 2) . '/protected-uploads/';
-    }
-
-    private function sanitizeFilename($filename)
-    {
-        $base = basename($filename);
-        // Rejects "." and ".." explicitly — both pass the character-class
-        // check below on their own (composed entirely of allowed
-        // characters), which would otherwise let a path made entirely of
-        // ".." segments escape protectedRoot via directory traversal —
-        // a real bug caught during review, not defensive-only code.
-        if (preg_match('/^\.+$/', $base)) {
-            return false;
-        }
-        if (!preg_match('/^[A-Za-z0-9._-]+$/', $base)) {
-            return false;
-        }
-        return $base;
-    }
-
-    // building is used as a path segment (matching roomPhotoSync.js's
-    // own roomphoto/{building}/{filename} structure) — sanitized the
-    // same way a filename is, since it's just as client-supplied.
-    private function sanitizePathSegment($segment)
-    {
-        if (preg_match('/^\.+$/', $segment)) {
-            return false;
-        }
-        if (!preg_match('/^[A-Za-z0-9._-]+$/', $segment)) {
-            return false;
-        }
-        return $segment;
-    }
-
-    // The real defense against arbitrary code execution — checked
-    // BEFORE the uploaded file ever gets moved anywhere. getimagesize()
-    // reads the file's actual header bytes to confirm it's a genuinely
-    // recognized image format; a PHP script named "photo.jpg" fails
-    // this outright, since its real content has no valid image header
-    // at all. Checked in addition to — not instead of — forcing the
-    // SAVED extension to match this verified type (see handleUpload
-    // below): even a crafted "polyglot" file that somehow passed this
-    // check would still only ever get saved with a safe, non-executable
-    // extension, since Apache decides how to handle a request based on
-    // the file's extension, not its actual content.
-    private function validateAndGetExtension($tmpPath)
-    {
-        $imageInfo = @getimagesize($tmpPath);
-        if ($imageInfo === false) {
-            return false;
-        }
-
-        $mimeToExt = array(
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png',
-            'image/gif' => 'gif',
-            'image/webp' => 'webp',
-        );
-
-        return isset($mimeToExt[$imageInfo['mime']]) ? $mimeToExt[$imageInfo['mime']] : false;
-    }
-
-    private function handleUpload($subfolder)
-    {
-        $this->requireAdmin();
-
-        if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'No valid file was uploaded.'));
-            return;
-        }
-
-        $safeExt = $this->validateAndGetExtension($_FILES['file']['tmp_name']);
-        if ($safeExt === false) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'The uploaded file is not a valid, recognized image.'));
-            return;
-        }
-
-        $building = isset($_POST['building']) ? $this->sanitizePathSegment($_POST['building']) : false;
-        if ($building === false) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Invalid or missing building.'));
-            return;
-        }
-
-        $requestedName = isset($_POST['filename']) ? $_POST['filename'] : $_FILES['file']['name'];
-        $requestedBase = pathinfo($requestedName, PATHINFO_FILENAME);
-        $safeBase = $this->sanitizeFilename($requestedBase);
-        if ($safeBase === false) {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Invalid filename.'));
-            return;
-        }
-
-        // The saved extension always comes from validateAndGetExtension's
-        // own verified result, never from the client-supplied filename.
-        $safeName = "{$safeBase}.{$safeExt}";
-
-        $targetDir = $this->protectedRoot . $subfolder . '/' . $building . '/';
-        if (!is_dir($targetDir)) {
-            mkdir($targetDir, 0755, true);
-        }
-
-        $targetPath = $targetDir . $safeName;
-        if (!move_uploaded_file($_FILES['file']['tmp_name'], $targetPath)) {
-            http_response_code(500);
-            echo json_encode(array('success' => false, 'error' => 'Failed to save the uploaded file.'));
-            return;
-        }
-
-        echo json_encode(array('success' => true, 'path' => "{$subfolder}/{$building}/{$safeName}"));
-    }
-
     // POST /IndoorUploads_API/roomPhoto — admin only.
+    // multipart/form-data: file (required), building (required),
+    // filename (optional override)
     public function roomPhoto()
     {
         $this->handleUpload('roomphoto');
@@ -164,8 +43,15 @@ class IndoorUploads_API extends MY_Controller
         $this->handleUpload('panoramas');
     }
 
+    private function handleUpload($category)
+    {
+        $this->requireAdmin();
+        $building = isset($_POST['building']) ? $_POST['building'] : null;
+        $this->savePhoto($category, $building);
+    }
+
     // POST /IndoorUploads_API/deleteReviewFile — admin only.
-    // Deliberately restricted to ONLY the panoramas-review/ subfolder —
+    // Deliberately restricted to ONLY the panoramas-review/ category —
     // this endpoint has no business deleting anything from panoramas/,
     // roomphoto/, or room360/ at all.
     public function deleteReviewFile()
@@ -182,21 +68,13 @@ class IndoorUploads_API extends MY_Controller
             return;
         }
 
-        $safeSegments = array();
-        foreach ($segments as $segment) {
-            $clean = $this->sanitizePathSegment($segment);
-            if ($clean === false) {
-                http_response_code(400);
-                echo json_encode(array('success' => false, 'error' => 'Invalid path.'));
-                return;
-            }
-            $safeSegments[] = $clean;
+        $result = $this->photoStore()->remove($path);
+        if (!$result['ok'] && $result['reason'] === 'invalid_path') {
+            $this->respondWithPhotoFailure($result);
+            return;
         }
 
-        $fullPath = $this->protectedRoot . implode('/', $safeSegments);
-        if (is_file($fullPath)) {
-            @unlink($fullPath);
-        }
+        // Already gone is as good as deleted.
         echo json_encode(array('success' => true));
     }
 
@@ -206,7 +84,8 @@ class IndoorUploads_API extends MY_Controller
     // Uploading (above) stays admin-only regardless; this only governs
     // viewing. Query param, not a URL segment, since a real path
     // contains slashes CI3's own segment routing would otherwise split
-    // apart.
+    // apart. Only protected photos are streamed here — public ones are
+    // served straight from disk by Apache.
     public function serve()
     {
         $path = $this->input->get('path');
@@ -216,38 +95,20 @@ class IndoorUploads_API extends MY_Controller
             return;
         }
 
-        // Rebuilt from individually-sanitized segments rather than
-        // trusting the combined string directly — the actual defense
-        // against a crafted path like "../../../etc/passwd" trying to
-        // escape protectedRoot entirely.
-        $segments = explode('/', $path);
-        $safeSegments = array();
-        foreach ($segments as $segment) {
-            $clean = $this->sanitizePathSegment($segment);
-            if ($clean === false) {
-                http_response_code(400);
-                echo 'Invalid path.';
-                return;
-            }
-            $safeSegments[] = $clean;
+        $photo = $this->photoStore()->resolve($path);
+        if (!$photo['ok']) {
+            http_response_code($photo['reason'] === 'invalid_path' ? 400 : 404);
+            echo $photo['reason'] === 'invalid_path' ? 'Invalid path.' : 'Not found.';
+            return;
         }
-
-        $fullPath = $this->protectedRoot . implode('/', $safeSegments);
-        if (!is_file($fullPath)) {
+        if ($photo['visibility'] !== 'protected') {
             http_response_code(404);
             echo 'Not found.';
             return;
         }
 
-        $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
-        $mimeTypes = array(
-            'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
-            'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif',
-        );
-        $mime = isset($mimeTypes[$ext]) ? $mimeTypes[$ext] : 'application/octet-stream';
-
-        header('Content-Type: ' . $mime);
-        header('Content-Length: ' . filesize($fullPath));
-        readfile($fullPath);
+        header('Content-Type: ' . $photo['content_type']);
+        header('Content-Length: ' . filesize($photo['full_path']));
+        readfile($photo['full_path']);
     }
 }

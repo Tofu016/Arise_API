@@ -140,119 +140,53 @@ class MY_Controller extends CI_Controller
         }
     }
 
-    // Confirms a usable uploaded file is present under $_FILES[$field].
-    // On success returns TRUE and the caller proceeds. On failure it emits
-    // a JSON error response with a SPECIFIC reason and the right HTTP
-    // status, then returns FALSE — the caller should just `return;`.
-    //
-    // The point of this over a plain `empty($_FILES['file'])` check: when
-    // an upload exceeds post_max_size, PHP throws away $_POST AND $_FILES
-    // entirely, so "the request body was too big" looks identical to "no
-    // file was attached" — both surface as the misleading
-    // "No valid file was uploaded." Panoramas are large enough (5–30 MB,
-    // sometimes more) that this is a real failure mode, not a hypothetical.
-    protected function requireUploadedFile($field = 'file')
+    // The one Photo store every upload, serve and gallery endpoint
+    // shares. Roots are env-driven so production can keep files outside
+    // the web root or on a separate volume; the defaults are the
+    // in-project locations these controllers have always used (FCPATH is
+    // where index.php lives; going up two levels from it lands outside
+    // htdocs entirely, genuinely unreachable by any web request).
+    protected function photoStore()
     {
-        // Case 1 — the whole POST body blew past post_max_size. Bytes were
-        // sent (CONTENT_LENGTH > 0) but PHP discarded everything, so both
-        // superglobals are empty. This is the case the naive check gets
-        // wrong.
-        $contentLength = isset($_SERVER['CONTENT_LENGTH']) ? (int) $_SERVER['CONTENT_LENGTH'] : 0;
-        if ($this->input->method() === 'post' && $contentLength > 0 && empty($_POST) && empty($_FILES)) {
-            $limit = $this->iniSizeBytes('post_max_size');
-            $this->uploadFail(413, $limit > 0
-                ? 'That upload is too large — the request is ' . $this->humanSize($contentLength)
-                  . ' but this server accepts at most ' . $this->humanSize($limit) . ' per request. '
-                  . 'Use a smaller image, or raise post_max_size (and upload_max_filesize) in php.ini.'
-                : 'That upload is too large for this server. Use a smaller image, or raise '
-                  . 'post_max_size and upload_max_filesize in php.ini.');
-            return false;
+        if (!isset($this->photo_store)) {
+            $this->load->library('Photo_store', array(
+                'public_root' => !empty($_ENV['UPLOAD_ROOT'])
+                    ? $_ENV['UPLOAD_ROOT']
+                    : FCPATH . 'uploads/',
+                'protected_root' => !empty($_ENV['PROTECTED_UPLOAD_ROOT'])
+                    ? $_ENV['PROTECTED_UPLOAD_ROOT']
+                    : dirname(FCPATH, 2) . '/protected-uploads/',
+            ));
         }
-
-        // Case 2 — no file part at all (genuinely nothing attached).
-        if (empty($_FILES[$field]) || !isset($_FILES[$field]['error'])) {
-            $this->uploadFail(400, 'No file was attached to the request (expected form field "' . $field . '").');
-            return false;
-        }
-
-        // Case 3 — a file part is present; PHP's own per-file error code
-        // tells us whether it actually arrived intact.
-        switch ($_FILES[$field]['error']) {
-            case UPLOAD_ERR_OK:
-                return true;
-
-            case UPLOAD_ERR_INI_SIZE:
-            case UPLOAD_ERR_FORM_SIZE:
-                $limit = $this->iniSizeBytes('upload_max_filesize');
-                $this->uploadFail(413, $limit > 0
-                    ? 'That file is too large — the limit for a single upload is ' . $this->humanSize($limit)
-                      . '. Use a smaller image, or raise upload_max_filesize in php.ini.'
-                    : 'That file is larger than this server allows for a single upload.');
-                return false;
-
-            case UPLOAD_ERR_PARTIAL:
-                $this->uploadFail(400, 'The file only uploaded partially — check your connection and try again.');
-                return false;
-
-            case UPLOAD_ERR_NO_FILE:
-                $this->uploadFail(400, 'No file was attached to the request.');
-                return false;
-
-            case UPLOAD_ERR_NO_TMP_DIR:
-            case UPLOAD_ERR_CANT_WRITE:
-            case UPLOAD_ERR_EXTENSION:
-                log_message('error', 'Upload failed server-side (PHP upload error code '
-                    . $_FILES[$field]['error'] . ') — check tmp dir / permissions / php extensions.');
-                $this->uploadFail(500, 'The server could not save the uploaded file. Please tell an administrator.');
-                return false;
-
-            default:
-                $this->uploadFail(400, 'The upload failed (error code ' . (int) $_FILES[$field]['error'] . ').');
-                return false;
-        }
+        return $this->photo_store;
     }
 
-    // Emits the standard { success:false, error } JSON shape with an
-    // explicit HTTP status. Same shape every other guard here uses.
-    private function uploadFail($status, $message)
+    // Saves the uploaded image as a Photo in $category and emits the
+    // standard reply: { success: true, path } on success, or the
+    // failure's own JSON error and HTTP status. $building is only for
+    // per-building categories. Callers check requireAdmin() first.
+    protected function savePhoto($category, $building = null)
     {
-        http_response_code($status);
-        echo json_encode(array('success' => false, 'error' => $message));
+        $store = $this->photoStore();
+        $name = isset($_POST['filename']) ? $_POST['filename'] : null;
+        $result = $store->save($category, Photo_store::incomingFromGlobals(), $name, $building);
+
+        if ($result['ok']) {
+            echo json_encode(array('success' => true, 'path' => $result['path']));
+            return;
+        }
+        $this->respondWithPhotoFailure($result);
     }
 
-    // Converts a php.ini shorthand size ("64M", "8K", "1G") to a byte
-    // count. Returns 0 when the setting is empty or "0" — for
-    // post_max_size, 0 legitimately means "no limit", so callers treat 0
-    // as "don't mention a specific number".
-    private function iniSizeBytes($key)
+    // Emits the standard { success: false, error } shape with the
+    // failure result's HTTP status. Details the admin shouldn't see
+    // (result['log']) go to the server log instead.
+    protected function respondWithPhotoFailure(array $result)
     {
-        $raw = trim((string) ini_get($key));
-        if ($raw === '' || (int) $raw === 0) {
-            return 0;
+        if (isset($result['log'])) {
+            log_message('error', $result['log']);
         }
-        $value = (int) $raw;
-        switch (strtolower(substr($raw, -1))) {
-            case 'g':
-                return $value * 1024 * 1024 * 1024;
-            case 'm':
-                return $value * 1024 * 1024;
-            case 'k':
-                return $value * 1024;
-            default:
-                return $value;
-        }
-    }
-
-    // Bytes -> a short human string for error messages ("18.4 MB").
-    private function humanSize($bytes)
-    {
-        $bytes = (int) $bytes;
-        if ($bytes >= 1048576) {
-            return round($bytes / 1048576, 1) . ' MB';
-        }
-        if ($bytes >= 1024) {
-            return round($bytes / 1024) . ' KB';
-        }
-        return $bytes . ' B';
+        http_response_code($result['status']);
+        echo json_encode(array('success' => false, 'error' => $result['error']));
     }
 }
