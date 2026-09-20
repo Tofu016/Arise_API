@@ -28,8 +28,12 @@ _Avoid_: Private photo, secure photo
 Where Photos are saved, found, read and removed, addressed only by Photo path.
 _Avoid_: Uploader, file manager, storage service
 
+**Photo column**:
+A database column that stores a Photo path. By convention its name contains "photo".
+_Avoid_: Image column, path column
+
 **In-use photo**:
-A Photo whose Photo path is referenced by at least one record. Only a Photo that is not in use may be deleted.
+A Photo whose Photo path is stored in at least one Photo column. Only a Photo that is not in use may be deleted.
 _Avoid_: Linked photo, active photo
 
 **Orphaned photo**:
