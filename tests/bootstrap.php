@@ -47,5 +47,15 @@ require_once APPPATH . 'core/MY_Controller.php';
 foreach (array('Auth', 'Nodes', 'TourStops', 'Buildings', 'Users', 'TourSections', 'PlacardDialogs') as $controller) {
     require_once APPPATH . "controllers/{$controller}_API.php";
 }
+// Models extend CI_Model; stubbed so their methods can be called with a
+// FakeDb assigned in place of the real query builder (constructors, which
+// load the database, are skipped by the test harness classes).
+class CI_Model
+{
+}
+
+require_once APPPATH . 'models/Nodes_Model.php';
+require_once APPPATH . 'models/TourStops_Model.php';
+require_once __DIR__ . '/support/FakeDb.php';
 require_once __DIR__ . '/support/FakeModel.php';
 require_once __DIR__ . '/support/ActionTestCase.php';
