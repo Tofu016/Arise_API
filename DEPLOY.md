@@ -126,6 +126,12 @@ SMTP_FROM_NAME="ARISE Campus Navigator"
   absolute paths (trailing slash). Don't leave them blank on the server:
   the blank-value fallback for `PROTECTED_UPLOAD_ROOT` resolves to two
   directories *above* `index.php`, which won't be what you want here.
+  Every upload, serve and gallery endpoint reads these through one place
+  (`MY_Controller::photoStore()`). Before that was consolidated,
+  `PROTECTED_UPLOAD_ROOT` was ignored and indoor photos went to that
+  fallback location — so if a server ran an older version with these
+  variables set, move any files found in `<two levels above index.php>/
+  protected-uploads/` into `PROTECTED_UPLOAD_ROOT` once.
 
 ### A5. Create the database
 
