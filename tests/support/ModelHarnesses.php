@@ -9,3 +9,21 @@ class EmailModelHarness extends Email_Model
     {
     }
 }
+
+class AuthModelHarness extends Auth_Model
+{
+    public $db;
+
+    public function __construct()
+    {
+    }
+}
+
+class UsersModelHarness extends Users_Model
+{
+    public $db;
+
+    public function __construct()
+    {
+    }
+}
