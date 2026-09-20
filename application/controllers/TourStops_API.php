@@ -1,6 +1,8 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
+require_once APPPATH . 'libraries/Neighbor_actions.php';
+
 // Same conventions as TourSections_API — extends MY_Controller,
 // getAll() genuinely public (matching the original confirmed
 // tourStops Firestore rule: allow read: if true), every write behind
@@ -9,6 +11,8 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // tour_sections never needed.
 class TourStops_API extends MY_Controller
 {
+    use Neighbor_actions;
+
     public function __construct()
     {
         parent::__construct();
@@ -113,61 +117,16 @@ class TourStops_API extends MY_Controller
         return Api_response::ok();
     }
 
-    // POST /TourStops_API/addNeighbor — admin only.
-    // Body: stop_id, neighbor_id, yaw, pitch, reverse_yaw, reverse_pitch
-    // Writes both directions of the link in one call — see
-    // TourStops_Model::addNeighbor for why both angles are required.
-    public function addNeighbor()
+    // addNeighbor, removeNeighbor and updateNeighborAngle are shared with
+    // Nodes_API — see Neighbor_actions. Only these two hooks differ.
+    protected function neighborOwnerField()
     {
-        $this->requireAdmin();
-
-        $data = $this->getInput();
-        Api_input::requirePresent($data, array('stop_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch'));
-
-        $this->TourStops_Model->addNeighbor(
-            $data['stop_id'],
-            $data['neighbor_id'],
-            $data['yaw'],
-            $data['pitch'],
-            $data['reverse_yaw'],
-            $data['reverse_pitch']
-        );
-
-        return Api_response::ok();
+        return 'stop_id';
     }
 
-    // POST /TourStops_API/removeNeighbor — admin only.
-    // Body: stop_id, neighbor_id — removes both directions.
-    public function removeNeighbor()
+    protected function neighborModel()
     {
-        $this->requireAdmin();
-
-        $data = $this->getInput();
-        Api_input::requireFilled($data, array('stop_id', 'neighbor_id'), 'stop_id and neighbor_id are both required.');
-
-        $this->TourStops_Model->removeNeighbor($data['stop_id'], $data['neighbor_id']);
-        return Api_response::ok();
-    }
-
-    // PATCH /TourStops_API/updateNeighborAngle — admin only.
-    // Body: stop_id, neighbor_id, yaw, pitch — updates ONE direction's
-    // angle only, matching setHotspot()'s real semantics. See
-    // TourStops_Model::updateNeighborAngle for why addNeighbor() alone
-    // can't do this.
-    public function updateNeighborAngle()
-    {
-        $this->requireAdmin();
-
-        $data = $this->getInput();
-        Api_input::requirePresent($data, array('stop_id', 'neighbor_id', 'yaw', 'pitch'));
-
-        $this->TourStops_Model->updateNeighborAngle(
-            $data['stop_id'],
-            $data['neighbor_id'],
-            $data['yaw'],
-            $data['pitch']
-        );
-        return Api_response::ok();
+        return $this->TourStops_Model;
     }
 
     // POST /TourStops_API/addMarker — admin only.

@@ -1,6 +1,8 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
+require_once APPPATH . 'libraries/Neighbor_actions.php';
+
 // Same conventions throughout — getAll() public, writes behind
 // requireAdmin(). Two extra validation steps exist here specifically
 // because nodes has real constraints tour_stops didn't: create()
@@ -10,6 +12,8 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // what would otherwise be a raw SQL error into a clear message.
 class Nodes_API extends MY_Controller
 {
+    use Neighbor_actions;
+
     public function __construct()
     {
         parent::__construct();
@@ -120,56 +124,16 @@ class Nodes_API extends MY_Controller
         return Api_response::ok();
     }
 
-    // POST /Nodes_API/addNeighbor — admin only.
-    // Body: node_id, neighbor_id, yaw, pitch, reverse_yaw, reverse_pitch
-    public function addNeighbor()
+    // addNeighbor, removeNeighbor and updateNeighborAngle are shared with
+    // TourStops_API — see Neighbor_actions. Only these two hooks differ.
+    protected function neighborOwnerField()
     {
-        $this->requireAdmin();
-
-        $data = $this->getInput();
-        Api_input::requirePresent($data, array('node_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch'));
-
-        $this->Nodes_Model->addNeighbor(
-            $data['node_id'],
-            $data['neighbor_id'],
-            $data['yaw'],
-            $data['pitch'],
-            $data['reverse_yaw'],
-            $data['reverse_pitch']
-        );
-
-        return Api_response::ok();
+        return 'node_id';
     }
 
-    // POST /Nodes_API/removeNeighbor — admin only.
-    // Body: node_id, neighbor_id
-    public function removeNeighbor()
+    protected function neighborModel()
     {
-        $this->requireAdmin();
-
-        $data = $this->getInput();
-        Api_input::requireFilled($data, array('node_id', 'neighbor_id'), 'node_id and neighbor_id are both required.');
-
-        $this->Nodes_Model->removeNeighbor($data['node_id'], $data['neighbor_id']);
-        return Api_response::ok();
-    }
-
-    // PATCH /Nodes_API/updateNeighborAngle — admin only.
-    // Body: node_id, neighbor_id, yaw, pitch
-    public function updateNeighborAngle()
-    {
-        $this->requireAdmin();
-
-        $data = $this->getInput();
-        Api_input::requirePresent($data, array('node_id', 'neighbor_id', 'yaw', 'pitch'));
-
-        $this->Nodes_Model->updateNeighborAngle(
-            $data['node_id'],
-            $data['neighbor_id'],
-            $data['yaw'],
-            $data['pitch']
-        );
-        return Api_response::ok();
+        return $this->Nodes_Model;
     }
 
     // POST /Nodes_API/addMarker — admin only.
