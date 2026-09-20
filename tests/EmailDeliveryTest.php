@@ -158,17 +158,7 @@ class EmailDeliveryTest extends TestCase
         $this->waiting($rows);
         $this->mailer->failFor = array('bad@x.ph');
 
-        // FakeDb serves every waiting row; the model applies its own limit
-        // only through the query, so emulate the database honouring it.
-        $model = new class extends EmailModelHarness {
-            public function getPending($limit = 20)
-            {
-                return array_slice(parent::getPending($limit), 0, $limit);
-            }
-        };
-        $model->db = $this->model->db;
-
-        $result = $model->deliverPending($this->mailer);
+        $result = $this->model->deliverPending($this->mailer);
 
         $this->assertSame(array(), $result['sent']);
         $this->assertSame(array(), $this->mailer->sent);

@@ -10,6 +10,7 @@ class FakeDb
 
     private $from;
     private $wheres = array();
+    private $limit = null;
 
     public function select($columns = '*')
     {
@@ -46,6 +47,7 @@ class FakeDb
     public function limit($count)
     {
         $this->log[] = array('limit', $count);
+        $this->limit = $count;
         return $this;
     }
 
@@ -60,6 +62,9 @@ class FakeDb
                 // A null value matches a null column, like SQL's IS NULL.
                 return array_key_exists($where[0], $row) && $row[$where[0]] === $where[1];
             }));
+        }
+        if ($this->limit !== null) {
+            $rows = array_slice($rows, 0, $this->limit);
         }
         $this->reset();
 
@@ -95,6 +100,7 @@ class FakeDb
     {
         $this->from = null;
         $this->wheres = array();
+        $this->limit = null;
     }
 }
 

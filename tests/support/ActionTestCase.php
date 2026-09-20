@@ -48,7 +48,7 @@ class BuildingsApiHarness extends Buildings_API
 class UsersApiHarness extends Users_API
 {
     use ControllerHarness;
-    public $modelNames = array('Users_Model', 'Auth_Model');
+    public $modelNames = array('Users_Model', 'Auth_Model', 'Email_Model');
 }
 
 class TourSectionsApiHarness extends TourSections_API
@@ -66,7 +66,7 @@ class PlacardDialogsApiHarness extends PlacardDialogs_API
 class AuthApiHarness extends Auth_API
 {
     use ControllerHarness;
-    public $modelNames = array('Auth_Model');
+    public $modelNames = array('Auth_Model', 'Email_Model');
 }
 
 abstract class ActionTestCase extends TestCase

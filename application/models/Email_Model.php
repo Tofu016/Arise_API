@@ -52,7 +52,7 @@ class Email_Model extends CI_Model
     // through an unbounded backlog if the job hasn't run in a while for
     // some reason (the SMTP server going down, the task getting
     // disabled, etc.). Runs again on the next scheduled tick regardless.
-    public function getPending($limit = 20)
+    private function getPending($limit = 20)
     {
         $this->db->select('*');
         $this->db->from('email_queue');
@@ -63,7 +63,7 @@ class Email_Model extends CI_Model
         return $query->result_array();
     }
 
-    public function markSent($id)
+    private function markSent($id)
     {
         $this->db->where('id', $id);
         return $this->db->update('email_queue', array(

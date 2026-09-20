@@ -1,16 +1,16 @@
 <?php
 // Pins the email each caller queues: recipient, subject and body, word
 // for word (including how the recipient's name is escaped), and when none
-// is queued at all. Written against the current code, where each body is
-// built inline in the controller.
+// is queued at all. Written before the bodies moved out of the controllers into
+// Account_mail, and unchanged by that move.
 class EmailContentTest extends ActionTestCase
 {
     // Every email an action queued, as array(to, subject, body).
     private function queued()
     {
         $emails = array();
-        foreach ($this->controller->Auth_Model->calls as $call) {
-            if ($call[0] === 'queueEmail') {
+        foreach ($this->controller->Email_Model->calls as $call) {
+            if ($call[0] === 'enqueue') {
                 $emails[] = $call[1];
             }
         }

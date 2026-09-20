@@ -1,34 +1,24 @@
 <?php
 use PHPUnit\Framework\TestCase;
 
-// Pins the email_queue queries as they stand: what is written when an
-// email is queued, and what the sender reads and updates.
+// Pins the email_queue queries as they stand, seen through the model's
+// interface: what deliverPending reads to find waiting emails, and what
+// it writes when one is sent.
 class EmailQueueModelsTest extends TestCase
 {
-    private function model($class, array $tables = array())
+    private function model(array $rows = array())
     {
-        $model = new $class();
+        $model = new EmailModelHarness();
         $model->db = new FakeDb();
-        $model->db->tables = $tables;
+        $model->db->tables = array('email_queue' => $rows);
         return $model;
     }
 
-    public function testQueueEmailInsertsOneRowWithNoSentTime()
+    public function testItReadsUnsentRowsOldestFirstWithABatchLimit()
     {
-        $model = $this->model('AuthModelHarness');
+        $model = $this->model();
 
-        $model->queueEmail('a@sdca.edu.ph', 'Hello', '<p>Hi</p>');
-
-        $this->assertSame(array(
-            array('insert', 'email_queue', array('to_email' => 'a@sdca.edu.ph', 'subject' => 'Hello', 'body_html' => '<p>Hi</p>')),
-        ), $model->db->log);
-    }
-
-    public function testGetPendingReadsUnsentRowsOldestFirstWithABatchLimit()
-    {
-        $model = $this->model('EmailModelHarness');
-
-        $model->getPending();
+        $model->deliverPending(new FakeMailer());
 
         $this->assertSame(array(
             array('select', '*'),
@@ -40,35 +30,46 @@ class EmailQueueModelsTest extends TestCase
         ), $model->db->log);
     }
 
-    public function testGetPendingBatchSizeIsAdjustable()
+    public function testItSendsOnlyRowsThatAreStillUnsent()
     {
-        $model = $this->model('EmailModelHarness');
+        $model = $this->model(array(
+            array('id' => 1, 'to_email' => 'done@x.ph', 'subject' => 's', 'body_html' => 'b', 'sent_at' => '2026-09-01 10:00:00'),
+            array('id' => 2, 'to_email' => 'wait@x.ph', 'subject' => 's', 'body_html' => 'b', 'sent_at' => null),
+        ));
+        $mailer = new FakeMailer();
 
-        $model->getPending(5);
+        $model->deliverPending($mailer);
 
-        $this->assertContains(array('limit', 5), $model->db->log);
+        $this->assertSame(array('wait@x.ph'), array_column($mailer->sent, 0));
     }
 
-    public function testGetPendingReturnsOnlyUnsentRows()
+    public function testASentRowIsStampedWithTheCurrentTime()
     {
-        $model = $this->model('EmailModelHarness', array('email_queue' => array(
-            array('id' => 1, 'sent_at' => '2026-09-01 10:00:00'),
-            array('id' => 2, 'sent_at' => null),
-        )));
+        $model = $this->model(array(
+            array('id' => 7, 'to_email' => 'wait@x.ph', 'subject' => 's', 'body_html' => 'b', 'sent_at' => null),
+        ));
 
-        $this->assertSame(array(2), array_column($model->getPending(), 'id'));
+        $model->deliverPending(new FakeMailer());
+
+        $writes = array_values(array_filter($model->db->log, function ($entry) {
+            return in_array($entry[0], array('update', 'insert', 'delete'), true);
+        }));
+        $this->assertCount(1, $writes);
+        $this->assertSame('update', $writes[0][0]);
+        $this->assertSame('email_queue', $writes[0][1]);
+        $this->assertSame(array('sent_at'), array_keys($writes[0][2]));
+        $this->assertMatchesRegularExpression('/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/', $writes[0][2]['sent_at']);
+        $this->assertContains(array('where', 'id', 7), $model->db->log);
     }
 
-    public function testMarkSentStampsTheRowWithTheCurrentTime()
+    public function testTheQueueIsNotWrittenToByARunThatSendsNothing()
     {
-        $model = $this->model('EmailModelHarness');
+        $model = $this->model();
 
-        $model->markSent(7);
+        $model->deliverPending(new FakeMailer());
 
-        $this->assertSame(array('where', 'id', 7), $model->db->log[0]);
-        $this->assertSame('update', $model->db->log[1][0]);
-        $this->assertSame('email_queue', $model->db->log[1][1]);
-        $this->assertSame(array('sent_at'), array_keys($model->db->log[1][2]));
-        $this->assertMatchesRegularExpression('/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/', $model->db->log[1][2]['sent_at']);
+        $this->assertSame(array(), array_filter($model->db->log, function ($entry) {
+            return in_array($entry[0], array('update', 'insert', 'delete'), true);
+        }));
     }
 }

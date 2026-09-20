@@ -2,6 +2,7 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 require_once APPPATH . 'libraries/Account_policy.php';
+require_once APPPATH . 'libraries/Account_mail.php';
 
 // Login, logout, registration, and password reset. Auth_Model's
 // underlying checks (verifyCredentials, register, etc.) work against
@@ -11,6 +12,12 @@ require_once APPPATH . 'libraries/Account_policy.php';
 // Controller or anything downstream of it.
 class Auth_API extends MY_Controller
 {
+    public function __construct()
+    {
+        parent::__construct();
+        $this->load->model('Email_Model');
+    }
+
     // POST /Auth_API/login
     // Body: email, password
     public function login()
@@ -111,11 +118,8 @@ class Auth_API extends MY_Controller
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
         $user = $this->Auth_Model->register($email, $passwordHash, $name);
 
-        $this->Auth_Model->queueEmail(
-            $email,
-            'Welcome to ARISE Campus Navigator',
-            '<p>Hi ' . htmlspecialchars($name) . ',</p><p>Thanks for registering. Your account is currently pending approval — you\'ll receive another email once an administrator approves it.</p>'
-        );
+        $welcome = Account_mail::welcome($name);
+        $this->Email_Model->enqueue($email, $welcome['subject'], $welcome['html']);
 
         $token = $this->Auth_Model->createToken($user['id']);
 
@@ -150,19 +154,8 @@ class Auth_API extends MY_Controller
         $user = $this->Auth_Model->findByEmail($email);
         if ($user) {
             $resetToken = $this->Auth_Model->createPasswordResetToken($user['id']);
-            // The React app's own reset-password page/route — adjust
-            // this URL if that page ends up living somewhere else or
-            // under a different path.
-            $resetLink = 'http://localhost:5173/reset-password?token=' . urlencode($resetToken);
-
-            $this->Auth_Model->queueEmail(
-                $email,
-                'Reset your ARISE Campus Navigator password',
-                '<p>Hi ' . htmlspecialchars($user['name']) . ',</p>'
-                . '<p>Click the link below to reset your password. This link expires in 1 hour and can only be used once.</p>'
-                . '<p><a href="' . htmlspecialchars($resetLink) . '">' . htmlspecialchars($resetLink) . '</a></p>'
-                . '<p>If you didn\'t request this, you can safely ignore this email.</p>'
-            );
+            $reset = Account_mail::passwordReset($user['name'], 'http://localhost:5173', $resetToken);
+            $this->Email_Model->enqueue($email, $reset['subject'], $reset['html']);
         }
 
         return Api_response::ok();

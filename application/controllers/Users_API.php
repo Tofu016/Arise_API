@@ -1,6 +1,8 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
+require_once APPPATH . 'libraries/Account_mail.php';
+
 // Admin-only throughout — unlike every other resource built so far,
 // nothing here is public; a user list is never navigation data.
 // updateRole() replicates sendApprovalEmail's original behavior
@@ -14,9 +16,7 @@ class Users_API extends MY_Controller
     {
         parent::__construct();
         $this->load->model('Users_Model');
-        // Auth_Model is already loaded by MY_Controller's own
-        // constructor (needed for getCurrentUser()) — reused here for
-        // queueEmail(), not loaded a second time.
+        $this->load->model('Email_Model');
     }
 
     // GET /Users_API/getAll — admin only.
@@ -53,11 +53,8 @@ class Users_API extends MY_Controller
         $user = $this->Users_Model->updateRole($id, $newRole);
 
         if ($wasApproved) {
-            $this->Auth_Model->queueEmail(
-                $user['email'],
-                'Your ARISE Campus Navigator account has been approved',
-                '<p>Hi ' . htmlspecialchars($user['name']) . ',</p><p>Your account has been approved. You can now log in and start using ARISE Campus Navigator.</p>'
-            );
+            $approved = Account_mail::accountApproved($user['name']);
+            $this->Email_Model->enqueue($user['email'], $approved['subject'], $approved['html']);
         }
 
         return Api_response::ok(array('user' => $user));

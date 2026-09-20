@@ -39,7 +39,7 @@ class UsersActionsTest extends ActionTestCase
     {
         $this->call('UsersApiHarness', 'updateRole', array('2'), array('role' => 'user'), $this->roles(true));
 
-        $this->assertSame('queueEmail', $this->controller->Auth_Model->calls[0][0]);
-        $this->assertSame('a@sdca.edu.ph', $this->controller->Auth_Model->calls[0][1][0]);
+        $this->assertSame('enqueue', $this->controller->Email_Model->calls[0][0]);
+        $this->assertSame('a@sdca.edu.ph', $this->controller->Email_Model->calls[0][1][0]);
     }
 }

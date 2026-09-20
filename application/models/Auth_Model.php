@@ -144,21 +144,6 @@ class Auth_Model extends CI_Model
         return $this->db->get()->row_array();
     }
 
-    // Replaces the "mail" Firestore collection + Trigger Email extension
-    // that sendWelcomeEmail/sendApprovalEmail relied on — queued, not
-    // sent inline here, for the same reason as the original: a slow or
-    // failed SMTP call shouldn't block or fail the actual request that
-    // triggered it. A separate, periodic job (PHPMailer, run via cron or
-    // a scheduled task) is responsible for actually sending queued rows.
-    public function queueEmail($toEmail, $subject, $bodyHtml)
-    {
-        $this->db->insert('email_queue', array(
-            'to_email' => $toEmail,
-            'subject' => $subject,
-            'body_html' => $bodyHtml,
-        ));
-    }
-
     // ---------- Password reset ----------
 
     // Same shape as createToken() above, but a much shorter lifetime (1
