@@ -121,7 +121,12 @@ SMTP_FROM_NAME="ARISE Campus Navigator"
   (`VITE_API_BASE_URL` minus the `/index.php`). URLs keep `/index.php/`
   in the path unless you add a rewrite rule (see notes).
 - **`CORS_ORIGIN`** is the exact scheme + host of the deployed web app,
-  no trailing slash. Native apps (Expo) don't need it.
+  no trailing slash. Native apps (Expo) don't need it. It is also the
+  address the password-reset email links to (unless `FRONTEND_URL` is
+  set), so it must be the real web app address — before this was fixed,
+  reset links always pointed at `http://localhost:5173`.
+- **`FRONTEND_URL`** is optional. Set it only if the web app's address
+  for links differs from `CORS_ORIGIN`.
 - **`UPLOAD_ROOT` / `PROTECTED_UPLOAD_ROOT`** — set both explicitly to
   absolute paths (trailing slash). Don't leave them blank on the server:
   the blank-value fallback for `PROTECTED_UPLOAD_ROOT` resolves to two
@@ -331,6 +336,7 @@ Also back up the uploaded images — `/var/www/arise-api/uploads/` and
 | `CI_ENV` | `production` | `development` on laptops only — it exposes errors |
 | `BASE_URL` | `https://api.yourdomain.edu.ph/` | trailing slash; must match the front-end build |
 | `CORS_ORIGIN` | `https://app.yourdomain.edu.ph` | exact origin, no trailing slash |
+| `FRONTEND_URL` | *(blank)* | optional; the web app's address for links in emails (password reset). Blank = use `CORS_ORIGIN` |
 | `DB_HOST` | `localhost` | co-locate DB with PHP — CI3 opens one connection per request |
 | `DB_USER` / `DB_PASS` / `DB_NAME` | `arise` / … / `arise_web` | |
 | `UPLOAD_ROOT` | `/var/www/arise-api/uploads/` | absolute, trailing slash; folder is under DocumentRoot and served directly |

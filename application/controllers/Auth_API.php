@@ -154,7 +154,7 @@ class Auth_API extends MY_Controller
         $user = $this->Auth_Model->findByEmail($email);
         if ($user) {
             $resetToken = $this->Auth_Model->createPasswordResetToken($user['id']);
-            $reset = Account_mail::passwordReset($user['name'], 'http://localhost:5173', $resetToken);
+            $reset = Account_mail::passwordReset($user['name'], $this->frontendUrl(), $resetToken);
             $this->Email_Model->enqueue($email, $reset['subject'], $reset['html']);
         }
 

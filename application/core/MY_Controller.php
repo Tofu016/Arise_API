@@ -158,6 +158,22 @@ class MY_Controller extends CI_Controller
         }
     }
 
+    // The web app's own address (scheme + host, no trailing slash), for
+    // building links that point at it — the password-reset email's link,
+    // for one. FRONTEND_URL if set; otherwise CORS_ORIGIN, which is the
+    // same address in a normal deployment (see DEPLOY.md), so setting
+    // that alone is enough; otherwise the local Vite dev server. A blank
+    // value counts as unset.
+    protected function frontendUrl()
+    {
+        foreach (array('FRONTEND_URL', 'CORS_ORIGIN') as $key) {
+            if (!empty($_ENV[$key])) {
+                return rtrim($_ENV[$key], '/');
+            }
+        }
+        return 'http://localhost:5173';
+    }
+
     // The one Photo store every upload, serve and gallery endpoint
     // shares. Roots are env-driven so production can keep files outside
     // the web root or on a separate volume; the defaults are the
