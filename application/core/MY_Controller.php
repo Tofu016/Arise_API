@@ -1,6 +1,10 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
+// A plain file, not loaded through CI's loader: it holds static methods
+// and an exception class, and is never instantiated as a library.
+require_once APPPATH . 'libraries/Api_response.php';
+
 // Shared base every API controller should extend instead of
 // CI_Controller directly — CodeIgniter 3's own, documented extension
 // mechanism (any file named exactly MY_Controller in application/core/
@@ -105,22 +109,19 @@ class MY_Controller extends CI_Controller
         return $user !== null && in_array($user['role'], array('user', 'admin'), true);
     }
 
-    // Call at the top of any method that should be admin-only — sends
-    // 401/403 and stops execution immediately if the check fails, same
-    // shape as how the original Firestore rules simply refused a query
-    // outright rather than letting application code decide what to do
-    // about it.
+    // Call at the top of any method that should be admin-only — stops
+    // the action with a 401/403 reply if the check fails, same shape as
+    // how the original Firestore rules simply refused a query outright
+    // rather than letting application code decide what to do about it.
+    // Throws an Api_abort that _remap turns into the reply; only ever
+    // call this from inside an action, never a constructor.
     protected function requireAdmin()
     {
         if (!$this->signedIn()) {
-            http_response_code(401);
-            echo json_encode(array('success' => false, 'error' => 'Not signed in.'));
-            exit();
+            throw new Api_abort(Api_response::fail(401, 'Not signed in.'));
         }
         if (!$this->isAdmin()) {
-            http_response_code(403);
-            echo json_encode(array('success' => false, 'error' => 'Admin access required.'));
-            exit();
+            throw new Api_abort(Api_response::fail(403, 'Admin access required.'));
         }
     }
 
@@ -129,14 +130,30 @@ class MY_Controller extends CI_Controller
     protected function requireApproved()
     {
         if (!$this->signedIn()) {
-            http_response_code(401);
-            echo json_encode(array('success' => false, 'error' => 'Not signed in.'));
-            exit();
+            throw new Api_abort(Api_response::fail(401, 'Not signed in.'));
         }
         if (!$this->isApproved()) {
-            http_response_code(403);
-            echo json_encode(array('success' => false, 'error' => 'Account not yet approved.'));
-            exit();
+            throw new Api_abort(Api_response::fail(403, 'Account not yet approved.'));
+        }
+    }
+
+    // Every request to a controller extending this one comes through
+    // here (CodeIgniter calls _remap in place of the action). Runs the
+    // action, then sends whatever Api_response it returned or a guard
+    // aborted with. An action that returns nothing is one not yet moved
+    // to return values: it has already echoed its own reply.
+    public function _remap($method, $params = array())
+    {
+        if (!Api_response::isAction($this, $method, array('MY_Controller', 'CI_Controller'))) {
+            show_404();
+            return;
+        }
+
+        $response = Api_response::run(function () use ($method, $params) {
+            return call_user_func_array(array($this, $method), $params);
+        });
+        if ($response !== null) {
+            $response->emit();
         }
     }
 
