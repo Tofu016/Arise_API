@@ -58,7 +58,7 @@ class Photos_API extends MY_Controller
             return $b['modified_at'] <=> $a['modified_at'];
         });
 
-        echo json_encode(array('success' => true, 'photos' => $photos));
+        return Api_response::ok(array('photos' => $photos));
     }
 
     // DELETE /Photos_API/delete — admin only. Body: path
@@ -77,23 +77,19 @@ class Photos_API extends MY_Controller
 
         $referenced = $this->getReferencedPaths();
         if (isset($referenced[$relativePath])) {
-            http_response_code(409);
-            echo json_encode(array('success' => false, 'error' => 'This photo is currently in use and cannot be deleted.'));
-            return;
+            return Api_response::fail(409, 'This photo is currently in use and cannot be deleted.');
         }
 
         $result = $this->photoStore()->remove($relativePath);
         if (!$result['ok']) {
             // A path the store won't accept is reported the same as one
             // that simply isn't there.
-            $result['status'] = $result['reason'] === 'delete_failed' ? 500 : 404;
             if ($result['reason'] === 'invalid_path') {
-                $result['error'] = 'Photo not found.';
+                return Api_response::fail(404, 'Photo not found.');
             }
-            $this->respondWithPhotoFailure($result);
-            return;
+            return Api_response::fail($result['status'], $result['error']);
         }
 
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 }

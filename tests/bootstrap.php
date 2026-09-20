@@ -30,4 +30,12 @@ function show_404()
     throw new Show404Called('show_404');
 }
 
+// CI's log_message(), recording instead of writing to application/logs.
+$GLOBALS['logged_messages'] = array();
+
+function log_message($level, $message)
+{
+    $GLOBALS['logged_messages'][] = array($level, $message);
+}
+
 require_once APPPATH . 'core/MY_Controller.php';

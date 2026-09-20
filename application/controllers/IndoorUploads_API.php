@@ -19,20 +19,20 @@ class IndoorUploads_API extends MY_Controller
     // filename (optional override)
     public function roomPhoto()
     {
-        $this->handleUpload('roomphoto');
+        return $this->handleUpload('roomphoto');
     }
 
     // POST /IndoorUploads_API/room360Photo — admin only.
     public function room360Photo()
     {
-        $this->handleUpload('room360');
+        return $this->handleUpload('room360');
     }
 
     // POST /IndoorUploads_API/panoramaReview — admin only.
     // Temporary holding area for a brand-new upload not yet reviewed.
     public function panoramaReview()
     {
-        $this->handleUpload('panoramas-review');
+        return $this->handleUpload('panoramas-review');
     }
 
     // POST /IndoorUploads_API/panoramaPublish — admin only.
@@ -40,14 +40,14 @@ class IndoorUploads_API extends MY_Controller
     // panoramas/{building}/{filename} shape exactly.
     public function panoramaPublish()
     {
-        $this->handleUpload('panoramas');
+        return $this->handleUpload('panoramas');
     }
 
     private function handleUpload($category)
     {
         $this->requireAdmin();
         $building = isset($_POST['building']) ? $_POST['building'] : null;
-        $this->savePhoto($category, $building);
+        return $this->savePhoto($category, $building);
     }
 
     // POST /IndoorUploads_API/deleteReviewFile — admin only.
@@ -63,19 +63,16 @@ class IndoorUploads_API extends MY_Controller
 
         $segments = explode('/', $path);
         if (empty($segments) || $segments[0] !== 'panoramas-review') {
-            http_response_code(400);
-            echo json_encode(array('success' => false, 'error' => 'Invalid path.'));
-            return;
+            return Api_response::fail(400, 'Invalid path.');
         }
 
         $result = $this->photoStore()->remove($path);
         if (!$result['ok'] && $result['reason'] === 'invalid_path') {
-            $this->respondWithPhotoFailure($result);
-            return;
+            return Api_response::fail($result['status'], $result['error']);
         }
 
         // Already gone is as good as deleted.
-        echo json_encode(array('success' => true));
+        return Api_response::ok();
     }
 
     // GET /IndoorUploads_API/serve?path=roomphoto/gd1/somefile.jpg
@@ -86,6 +83,10 @@ class IndoorUploads_API extends MY_Controller
     // contains slashes CI3's own segment routing would otherwise split
     // apart. Only protected photos are streamed here — public ones are
     // served straight from disk by Apache.
+    //
+    // Deliberately NOT an Api_response: it streams image bytes and its
+    // errors are plain text, so it writes its own reply and returns
+    // nothing.
     public function serve()
     {
         $path = $this->input->get('path');

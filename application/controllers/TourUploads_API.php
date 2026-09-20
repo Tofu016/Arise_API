@@ -25,20 +25,20 @@ class TourUploads_API extends MY_Controller
     public function panorama()
     {
         $this->requireAdmin();
-        $this->savePhoto('tourpanorama');
+        return $this->savePhoto('tourpanorama');
     }
 
     // POST /TourUploads_API/cover — admin only.
     public function cover()
     {
         $this->requireAdmin();
-        $this->savePhoto('tourcover');
+        return $this->savePhoto('tourcover');
     }
 
     // POST /TourUploads_API/marker — admin only.
     public function marker()
     {
         $this->requireAdmin();
-        $this->savePhoto('tourmarker');
+        return $this->savePhoto('tourmarker');
     }
 }

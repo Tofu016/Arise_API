@@ -178,10 +178,11 @@ class MY_Controller extends CI_Controller
         return $this->photo_store;
     }
 
-    // Saves the uploaded image as a Photo in $category and emits the
-    // standard reply: { success: true, path } on success, or the
-    // failure's own JSON error and HTTP status. $building is only for
-    // per-building categories. Callers check requireAdmin() first.
+    // Saves the uploaded image as a Photo in $category and returns the
+    // reply: { success: true, path } on success, or the failure's own
+    // error and HTTP status. $building is only for per-building
+    // categories. Callers check requireAdmin() first. Details the admin
+    // shouldn't see (result['log']) go to the server log instead.
     protected function savePhoto($category, $building = null)
     {
         $store = $this->photoStore();
@@ -189,21 +190,11 @@ class MY_Controller extends CI_Controller
         $result = $store->save($category, Photo_store::incomingFromGlobals(), $name, $building);
 
         if ($result['ok']) {
-            echo json_encode(array('success' => true, 'path' => $result['path']));
-            return;
+            return Api_response::ok(array('path' => $result['path']));
         }
-        $this->respondWithPhotoFailure($result);
-    }
-
-    // Emits the standard { success: false, error } shape with the
-    // failure result's HTTP status. Details the admin shouldn't see
-    // (result['log']) go to the server log instead.
-    protected function respondWithPhotoFailure(array $result)
-    {
         if (isset($result['log'])) {
             log_message('error', $result['log']);
         }
-        http_response_code($result['status']);
-        echo json_encode(array('success' => false, 'error' => $result['error']));
+        return Api_response::fail($result['status'], $result['error']);
     }
 }
