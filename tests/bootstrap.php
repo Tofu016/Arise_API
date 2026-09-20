@@ -12,6 +12,8 @@ require_once APPPATH . 'libraries/Photo_references.php';
 require_once APPPATH . 'libraries/Api_input.php';
 require_once APPPATH . 'libraries/Account_policy.php';
 require_once APPPATH . 'libraries/Neighbor_links.php';
+require_once APPPATH . 'libraries/Account_mail.php';
+require_once APPPATH . 'libraries/Smtp_mailer.php';
 
 // MY_Controller extends CI_Controller and calls show_404(). Stubbed so its
 // own guard and dispatch code can be tested without booting the framework;
@@ -60,5 +62,7 @@ require_once APPPATH . 'models/Email_Model.php';
 require_once APPPATH . 'models/Nodes_Model.php';
 require_once APPPATH . 'models/TourStops_Model.php';
 require_once __DIR__ . '/support/FakeDb.php';
+require_once __DIR__ . '/support/FakeMailer.php';
+require_once __DIR__ . '/support/ModelHarnesses.php';
 require_once __DIR__ . '/support/FakeModel.php';
 require_once __DIR__ . '/support/ActionTestCase.php';

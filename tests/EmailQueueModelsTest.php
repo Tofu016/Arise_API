@@ -1,24 +1,6 @@
 <?php
 use PHPUnit\Framework\TestCase;
 
-class AuthModelHarness extends Auth_Model
-{
-    public $db;
-
-    public function __construct()
-    {
-    }
-}
-
-class EmailModelHarness extends Email_Model
-{
-    public $db;
-
-    public function __construct()
-    {
-    }
-}
-
 // Pins the email_queue queries as they stand: what is written when an
 // email is queued, and what the sender reads and updates.
 class EmailQueueModelsTest extends TestCase
