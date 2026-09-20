@@ -4,6 +4,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // A plain file, not loaded through CI's loader: it holds static methods
 // and an exception class, and is never instantiated as a library.
 require_once APPPATH . 'libraries/Api_response.php';
+require_once APPPATH . 'libraries/Api_input.php';
 
 // Shared base every API controller should extend instead of
 // CI_Controller directly — CodeIgniter 3's own, documented extension
