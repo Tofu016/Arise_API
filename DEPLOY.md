@@ -251,6 +251,22 @@ CLI-only (`is_cli_request()` guards it). `crontab -e`:
 Test once by hand first: `cd /var/www/arise-api && php index.php Cron_API processEmails`
 → `Processed: 0 sent, 0 failed.`
 
+A failed email is never dropped. It stays queued, each failure adds one to
+its `attempts` and records the reason in `last_error`, and the queue is
+read fresh-mail-first, so an undeliverable address can never block the
+emails behind it (and a long SMTP outage loses nothing — everything goes
+out once it is back). To see emails that keep failing:
+
+```sql
+SELECT id, to_email, subject, attempts, last_error, created_at
+FROM email_queue WHERE sent_at IS NULL AND attempts >= 5
+ORDER BY attempts DESC;
+```
+
+A row for a bad address will never succeed; delete it once you have looked
+(`DELETE FROM email_queue WHERE id = <id>`). Resetting `attempts` to 0 puts
+one back at the front of the queue.
+
 ### A11. HTTPS
 
 Get a certificate before going live — the PWA service worker and any
@@ -284,14 +300,42 @@ composer install --no-dev --optimize-autoloader
 
 That's it, **unless** the pull included:
 
-- **a schema change** → apply it: `mysql -u arise -p arise_web < schema.sql`
-  only rebuilds from scratch; for a live DB, run the specific
-  `ALTER TABLE` by hand (or adopt migrations later).
+- **a schema change** → **never re-import `schema.sql` on a live
+  database**: every table in it starts with `DROP TABLE IF EXISTS`, so
+  it wipes all data (it is only for building a fresh database). Run the
+  specific `ALTER TABLE` by hand instead, **before** pulling the new
+  code — see [Schema changes for a live database](#schema-changes-for-a-live-database)
+  below, and take a backup first.
 - **a new `.env` key** (check `git log -p -- .env.example`) → add it to
   the server's `.env`.
 - **a `composer.json` change** → already covered by the `composer install` above.
 
 CI3 has no build step and no cache to clear for normal code changes.
+
+### Schema changes for a live database
+
+`schema.sql` always describes the *current* schema, and a fresh install
+gets everything from it. A database that already exists is brought up to
+date with the statements below, oldest first, by hand. Apply an entry
+**before** deploying the code that needs it. Each is additive (new columns
+with defaults), so the previous code keeps working against the changed
+table and a rollback needs no schema change.
+
+**Email retry tracking** — adds `attempts` and `last_error` to
+`email_queue` (commit "Stop failing emails from starving the queue"):
+
+```sql
+ALTER TABLE email_queue
+  ADD COLUMN attempts   int(10) unsigned NOT NULL DEFAULT 0 AFTER body_html,
+  ADD COLUMN last_error varchar(500)     DEFAULT NULL       AFTER attempts;
+```
+
+```bash
+mysql -u arise -p arise_web -e "ALTER TABLE email_queue ADD COLUMN attempts int(10) unsigned NOT NULL DEFAULT 0 AFTER body_html, ADD COLUMN last_error varchar(500) DEFAULT NULL AFTER attempts"
+```
+
+Until it is applied, `Cron_API processEmails` fails loudly (unknown column
+`attempts`) rather than sending — so apply it first.
 
 ---
 
