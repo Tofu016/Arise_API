@@ -41,3 +41,6 @@ uploads/
 *.sublime-project
 /tests/tests/
 /tests/results/
+
+# PHPUnit
+.phpunit.result.cache
