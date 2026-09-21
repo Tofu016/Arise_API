@@ -34,9 +34,15 @@ class MY_Controller extends CI_Controller
     {
         parent::__construct();
 
-        $this->allowedOrigin = $_ENV['CORS_ORIGIN'] ?? 'http://localhost:5173';
+        // CORS_ORIGIN may be a comma-separated list (e.g. localhost plus a
+        // LAN address for kiosk/phone testing); the request's own Origin
+        // is echoed back only if it is on that list.
+        $allowed = array_map('trim', explode(',', $_ENV['CORS_ORIGIN'] ?? 'http://localhost:5173'));
+        $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        $this->allowedOrigin = in_array($requestOrigin, $allowed, true) ? $requestOrigin : $allowed[0];
 
         header('Access-Control-Allow-Origin: ' . $this->allowedOrigin);
+        header('Vary: Origin');
         header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
         header('Access-Control-Allow-Headers: Content-Type, Accept, Authorization');
 
@@ -146,7 +152,7 @@ class MY_Controller extends CI_Controller
     {
         foreach (array('FRONTEND_URL', 'CORS_ORIGIN') as $key) {
             if (!empty($_ENV[$key])) {
-                return rtrim($_ENV[$key], '/');
+                return rtrim(trim(explode(',', $_ENV[$key])[0]), '/');
             }
         }
         return 'http://localhost:5173';
