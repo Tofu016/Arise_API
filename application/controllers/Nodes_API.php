@@ -99,7 +99,7 @@ class Nodes_API extends MY_Controller
         $data = $this->getInput();
         $allowed = array(
             'name', 'building', 'floor', 'type', 'photo_path',
-            'leads_to_floor', 'flowchart_position_x', 'flowchart_position_y',
+            'leads_to_floor', 'flowchart_position_x', 'flowchart_position_y', 'is_starting_node',
         );
         $patch = Api_input::patch($data, $allowed);
 

@@ -350,6 +350,21 @@ mysql -u arise -p arise_web -e "ALTER TABLE email_queue ADD COLUMN attempts int(
 Until it is applied, `Cron_API processEmails` fails loudly (unknown column
 `attempts`) rather than sending — so apply it first.
 
+**Starting node per floor** — adds `is_starting_node` to `nodes`, the node
+an admin flags as where the kiosk drops visitors who pick that building floor:
+
+```sql
+ALTER TABLE nodes
+  ADD COLUMN is_starting_node tinyint(1) NOT NULL DEFAULT 0 AFTER leads_to_floor;
+```
+
+```bash
+mysql -u arise -p arise_web -e "ALTER TABLE nodes ADD COLUMN is_starting_node tinyint(1) NOT NULL DEFAULT 0 AFTER leads_to_floor"
+```
+
+Until it is applied, `Nodes_API update` fails (unknown column
+`is_starting_node`) whenever a node is saved with that field — apply it first.
+
 ---
 
 ## Part C — Rollback

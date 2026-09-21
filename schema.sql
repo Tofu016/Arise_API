@@ -132,6 +132,7 @@ CREATE TABLE `nodes` (
   `floor` int(11) NOT NULL,
   `type` varchar(64) NOT NULL,
   `leads_to_floor` int(11) DEFAULT NULL,
+  `is_starting_node` tinyint(1) NOT NULL DEFAULT 0,
   `photo_path` varchar(500) DEFAULT NULL,
   `flowchart_position_x` float DEFAULT NULL,
   `flowchart_position_y` float DEFAULT NULL,

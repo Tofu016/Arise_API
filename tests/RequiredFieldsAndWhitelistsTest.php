@@ -85,7 +85,7 @@ class RequiredFieldsAndWhitelistsTest extends ActionTestCase
             array('TourSectionsApiHarness', 'update', array('1'), array('label' => 'x', 'cover_photo_path' => 'tourcover/a.jpg')),
             array('NodesApiHarness', 'update', array('a'), array(
                 'name' => 'x', 'building' => 'gd1', 'floor' => 2, 'type' => 'hallway', 'photo_path' => 'panoramas/gd1/a.jpg',
-                'leads_to_floor' => 3, 'flowchart_position_x' => 1, 'flowchart_position_y' => 2,
+                'leads_to_floor' => 3, 'flowchart_position_x' => 1, 'flowchart_position_y' => 2, 'is_starting_node' => 1,
             )),
             array('NodesApiHarness', 'updateMarker', array('7'), array('type' => 'room', 'label' => 'x', 'yaw' => 1, 'pitch' => 2)),
             array('TourStopsApiHarness', 'update', array('a'), array('name' => 'x', 'section_id' => '1', 'photo_path' => 'tourpanorama/a.jpg', 'description' => 'd')),

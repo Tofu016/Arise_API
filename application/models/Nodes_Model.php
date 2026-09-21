@@ -219,7 +219,17 @@ class Nodes_Model extends CI_Model
         $data['updated_at'] = date('Y-m-d H:i:s');
         $this->db->where('id', $id);
         $this->db->update($this->table, $data);
-        return $this->find($id);
+        $node = $this->find($id);
+
+        // One starting node per building floor: flagging this one clears
+        // the flag on the rest of its floor.
+        if ($node && !empty($data['is_starting_node'])) {
+            $this->db->where('building', $node['building']);
+            $this->db->where('floor', $node['floor']);
+            $this->db->where('id !=', $id);
+            $this->db->update($this->table, array('is_starting_node' => 0));
+        }
+        return $node;
     }
 
     public function delete($id)
