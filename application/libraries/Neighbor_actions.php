@@ -75,4 +75,40 @@ trait Neighbor_actions
         );
         return Api_response::ok();
     }
+
+    // PATCH .../updateNeighborDefaultView — admin only.
+    // Body: <owner>, neighbor_id, default_yaw, default_pitch — the camera
+    // view to land on when arriving at neighbor_id via this specific edge,
+    // same one-direction-only semantics as updateNeighborAngle.
+    public function updateNeighborDefaultView()
+    {
+        $this->requireAdmin();
+
+        $owner = $this->neighborOwnerField();
+        $data = $this->getInput();
+        Api_input::requirePresent($data, array($owner, 'neighbor_id', 'default_yaw', 'default_pitch'));
+
+        $this->neighborModel()->updateNeighborDefaultView(
+            $data[$owner],
+            $data['neighbor_id'],
+            $data['default_yaw'],
+            $data['default_pitch']
+        );
+        return Api_response::ok();
+    }
+
+    // POST .../clearNeighborDefaultView — admin only.
+    // Body: <owner>, neighbor_id — removes this edge's arrival-view
+    // override, back to null (no override).
+    public function clearNeighborDefaultView()
+    {
+        $this->requireAdmin();
+
+        $owner = $this->neighborOwnerField();
+        $data = $this->getInput();
+        Api_input::requireFilled($data, array($owner, 'neighbor_id'), "{$owner} and neighbor_id are both required.");
+
+        $this->neighborModel()->updateNeighborDefaultView($data[$owner], $data['neighbor_id'], null, null);
+        return Api_response::ok();
+    }
 }

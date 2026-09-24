@@ -1,5 +1,5 @@
 <?php
-// Nodes_API and TourStops_API get their three neighbour-link actions from
+// Nodes_API and TourStops_API get their neighbour-link actions from
 // the Neighbor_actions trait. The URLs must not change: trait methods must
 // still be reachable through _remap, and the two hooks must not be.
 class NeighborActionsTest extends ActionTestCase
@@ -15,9 +15,9 @@ class NeighborActionsTest extends ActionTestCase
     }
 
     /** @dataProvider controllers */
-    public function testTheThreeActionsAreStillReachableByUrl($harness)
+    public function testTheActionsAreStillReachableByUrl($harness)
     {
-        foreach (array('addNeighbor', 'removeNeighbor', 'updateNeighborAngle') as $action) {
+        foreach (array('addNeighbor', 'removeNeighbor', 'updateNeighborAngle', 'updateNeighborDefaultView', 'clearNeighborDefaultView') as $action) {
             $this->assertTrue(Api_response::isAction(new $harness(), $action, self::BASES), $action);
         }
     }

@@ -30,7 +30,13 @@ trait ControllerHarness
 class NodesApiHarness extends Nodes_API
 {
     use ControllerHarness;
-    public $modelNames = array('Nodes_Model', 'Buildings_Model');
+    public $modelNames = array('Nodes_Model', 'Buildings_Model', 'Elevators_Model');
+}
+
+class ElevatorsApiHarness extends Elevators_API
+{
+    use ControllerHarness;
+    public $modelNames = array('Elevators_Model', 'Buildings_Model');
 }
 
 class TourStopsApiHarness extends TourStops_API

@@ -27,3 +27,12 @@ class UsersModelHarness extends Users_Model
     {
     }
 }
+
+class ElevatorsModelHarness extends Elevators_Model
+{
+    public $db;
+
+    public function __construct()
+    {
+    }
+}

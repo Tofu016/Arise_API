@@ -255,6 +255,13 @@ class TourStops_Model extends CI_Model
         return $this->neighborLinks()->setAngle($stopId, $neighborId, $yaw, $pitch);
     }
 
+    // The arrival view for this one edge only — see
+    // Neighbor_links::setDefaultView. $yaw/$pitch null clears it.
+    public function updateNeighborDefaultView($stopId, $neighborId, $yaw, $pitch)
+    {
+        return $this->neighborLinks()->setDefaultView($stopId, $neighborId, $yaw, $pitch);
+    }
+
     // ---------- Equipment markers ----------
 
     // $photoPaths is a plain array of paths — sort_order is assigned

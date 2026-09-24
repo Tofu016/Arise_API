@@ -22,7 +22,7 @@ class Buildings_API extends MY_Controller
     }
 
     // POST /Buildings_API/create — admin only.
-    // Body: name (required), floor_count (required), lat, lng (optional)
+    // Body: name (required), floor_count (required), lat, lng, campus_id (optional)
     public function create()
     {
         $this->requireAdmin();
@@ -42,7 +42,8 @@ class Buildings_API extends MY_Controller
             $name,
             $floorCount,
             isset($data['lat']) ? $data['lat'] : null,
-            isset($data['lng']) ? $data['lng'] : null
+            isset($data['lng']) ? $data['lng'] : null,
+            isset($data['campus_id']) ? $data['campus_id'] : null
         );
 
         return Api_response::ok(array('building' => $building));
@@ -56,7 +57,7 @@ class Buildings_API extends MY_Controller
         Api_input::requireId($id, 'building');
 
         $data = $this->getInput();
-        $allowed = array('name', 'floor_count', 'lat', 'lng');
+        $allowed = array('name', 'floor_count', 'lat', 'lng', 'campus_id');
         $patch = Api_input::patch($data, $allowed);
 
         $building = $this->Buildings_Model->update($id, $patch);

@@ -365,6 +365,91 @@ mysql -u arise -p arise_web -e "ALTER TABLE nodes ADD COLUMN is_starting_node ti
 Until it is applied, `Nodes_API update` fails (unknown column
 `is_starting_node`) whenever a node is saved with that field — apply it first.
 
+**Default view per hotspot link, and per starting node** — adds
+`default_yaw`/`default_pitch` to `node_neighbors` and `tour_stop_neighbors`
+(the camera view a visitor lands facing when arriving via that specific
+link), and `starting_view_yaw`/`starting_view_pitch` to `nodes` (the view
+for a floor's starting node when reached from the floor/building picker):
+
+```sql
+ALTER TABLE node_neighbors
+  ADD COLUMN default_yaw   float DEFAULT NULL AFTER pitch,
+  ADD COLUMN default_pitch float DEFAULT NULL AFTER default_yaw;
+
+ALTER TABLE tour_stop_neighbors
+  ADD COLUMN default_yaw   float DEFAULT NULL AFTER pitch,
+  ADD COLUMN default_pitch float DEFAULT NULL AFTER default_yaw;
+
+ALTER TABLE nodes
+  ADD COLUMN starting_view_yaw   float DEFAULT NULL AFTER is_starting_node,
+  ADD COLUMN starting_view_pitch float DEFAULT NULL AFTER starting_view_yaw;
+```
+
+```bash
+mysql -u arise -p arise_web -e "ALTER TABLE node_neighbors ADD COLUMN default_yaw float DEFAULT NULL AFTER pitch, ADD COLUMN default_pitch float DEFAULT NULL AFTER default_yaw"
+mysql -u arise -p arise_web -e "ALTER TABLE tour_stop_neighbors ADD COLUMN default_yaw float DEFAULT NULL AFTER pitch, ADD COLUMN default_pitch float DEFAULT NULL AFTER default_yaw"
+mysql -u arise -p arise_web -e "ALTER TABLE nodes ADD COLUMN starting_view_yaw float DEFAULT NULL AFTER is_starting_node, ADD COLUMN starting_view_pitch float DEFAULT NULL AFTER starting_view_yaw"
+```
+
+Until applied, `updateNeighborDefaultView`/`clearNeighborDefaultView` fail
+(unknown column) and `Nodes_API update` fails whenever a node is saved with
+`starting_view_yaw`/`starting_view_pitch` — apply it first.
+
+**Campus entrance** — adds `is_campus_entrance` to `nodes`, the single node
+an admin flags as representing a whole campus (GD1/GD2/GD3 share one;
+Digital Campus has its own), driving the cross-campus minimap:
+
+```sql
+ALTER TABLE nodes
+  ADD COLUMN is_campus_entrance tinyint(1) NOT NULL DEFAULT 0 AFTER starting_view_pitch;
+```
+
+```bash
+mysql -u arise -p arise_web -e "ALTER TABLE nodes ADD COLUMN is_campus_entrance tinyint(1) NOT NULL DEFAULT 0 AFTER starting_view_pitch"
+```
+
+Until it is applied, `Nodes_API update` fails (unknown column
+`is_campus_entrance`) whenever a node is saved with that field — apply it first.
+
+**Building entrance** — adds `is_building_entrance` to `nodes`, the single
+node an admin flags as representing one specific building (independent of
+campus entrance — a building entrance and its campus entrance can be the
+same node or two different ones):
+
+```sql
+ALTER TABLE nodes
+  ADD COLUMN is_building_entrance tinyint(1) NOT NULL DEFAULT 0 AFTER is_campus_entrance;
+```
+
+```bash
+mysql -u arise -p arise_web -e "ALTER TABLE nodes ADD COLUMN is_building_entrance tinyint(1) NOT NULL DEFAULT 0 AFTER is_campus_entrance"
+```
+
+Until it is applied, `Nodes_API update` fails (unknown column
+`is_building_entrance`) whenever a node is saved with that field — apply it first.
+
+**Stairs/fire-exit nodes can lead to more than one floor** — renames
+`leads_to_floor` (a single int) to `leads_to_floors` (comma-joined text,
+same storage convention as `elevators.accessible_floors` — see
+`Elevators_Model::parseFloors`/`joinFloors`), since a mid-building
+stairwell typically connects both up and down, not just one direction:
+
+```sql
+ALTER TABLE nodes
+  CHANGE COLUMN leads_to_floor leads_to_floors varchar(255) DEFAULT NULL;
+```
+
+```bash
+mysql -u arise -p arise_web -e "ALTER TABLE nodes CHANGE COLUMN leads_to_floor leads_to_floors varchar(255) DEFAULT NULL"
+```
+
+Existing single-floor values convert automatically (MySQL casts the old int
+into the new varchar as-is, e.g. `3` stays `"3"`, which `parseFloors` reads
+fine). Until applied, `Nodes_API create`/`update` fail (unknown column
+`leads_to_floors`) whenever a node is saved with that field — apply it
+first. Not additive like the others above, since it also renames the
+column — deploy the code and the migration together.
+
 ---
 
 ## Part C — Rollback

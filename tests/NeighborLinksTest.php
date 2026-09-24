@@ -59,28 +59,39 @@ class NeighborLinksTest extends TestCase
         ), $this->db->log);
     }
 
+    public function testSetDefaultViewUpdatesOnlyTheOneDirectionAndReturnsTheResult()
+    {
+        $this->assertTrue($this->links->setDefaultView('a', 'b', 7, 8));
+
+        $this->assertSame(array(
+            array('where', 'trail_id', 'a'),
+            array('where', 'neighbor_id', 'b'),
+            array('update', 'trail_edges', array('default_yaw' => 7, 'default_pitch' => 8)),
+        ), $this->db->log);
+    }
+
     public function testGroupedByOwnerGroupsEveryEdgeUnderItsOwner()
     {
         $this->db->tables['trail_edges'] = array(
-            array('id' => 1, 'trail_id' => 'a', 'neighbor_id' => 'b', 'yaw' => 1, 'pitch' => 2),
-            array('id' => 2, 'trail_id' => 'a', 'neighbor_id' => 'c', 'yaw' => 3, 'pitch' => 4),
-            array('id' => 3, 'trail_id' => 'b', 'neighbor_id' => 'a', 'yaw' => 5, 'pitch' => 6),
+            array('id' => 1, 'trail_id' => 'a', 'neighbor_id' => 'b', 'yaw' => 1, 'pitch' => 2, 'default_yaw' => 9, 'default_pitch' => 10),
+            array('id' => 2, 'trail_id' => 'a', 'neighbor_id' => 'c', 'yaw' => 3, 'pitch' => 4, 'default_yaw' => null, 'default_pitch' => null),
+            array('id' => 3, 'trail_id' => 'b', 'neighbor_id' => 'a', 'yaw' => 5, 'pitch' => 6, 'default_yaw' => null, 'default_pitch' => null),
         );
 
         $this->assertSame(array(
             'a' => array(
-                array('neighbor_id' => 'b', 'yaw' => 1, 'pitch' => 2),
-                array('neighbor_id' => 'c', 'yaw' => 3, 'pitch' => 4),
+                array('neighbor_id' => 'b', 'yaw' => 1, 'pitch' => 2, 'default_yaw' => 9, 'default_pitch' => 10),
+                array('neighbor_id' => 'c', 'yaw' => 3, 'pitch' => 4, 'default_yaw' => null, 'default_pitch' => null),
             ),
-            'b' => array(array('neighbor_id' => 'a', 'yaw' => 5, 'pitch' => 6)),
+            'b' => array(array('neighbor_id' => 'a', 'yaw' => 5, 'pitch' => 6, 'default_yaw' => null, 'default_pitch' => null)),
         ), $this->links->groupedByOwner());
     }
 
     public function testGroupedByOwnerCanBeScopedToOneOwner()
     {
         $this->db->tables['trail_edges'] = array(
-            array('id' => 1, 'trail_id' => 'a', 'neighbor_id' => 'b', 'yaw' => 1, 'pitch' => 2),
-            array('id' => 3, 'trail_id' => 'b', 'neighbor_id' => 'a', 'yaw' => 5, 'pitch' => 6),
+            array('id' => 1, 'trail_id' => 'a', 'neighbor_id' => 'b', 'yaw' => 1, 'pitch' => 2, 'default_yaw' => null, 'default_pitch' => null),
+            array('id' => 3, 'trail_id' => 'b', 'neighbor_id' => 'a', 'yaw' => 5, 'pitch' => 6, 'default_yaw' => null, 'default_pitch' => null),
         );
 
         $this->assertSame(array('b'), array_keys($this->links->groupedByOwner('b')));

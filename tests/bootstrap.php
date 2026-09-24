@@ -48,7 +48,7 @@ function log_message($level, $message)
 require_once APPPATH . 'core/MY_Controller.php';
 
 // Controllers whose actions are tested directly (see ActionTestCase).
-foreach (array('Auth', 'Nodes', 'TourStops', 'Buildings', 'Users', 'TourSections', 'PlacardDialogs') as $controller) {
+foreach (array('Auth', 'Nodes', 'Elevators', 'TourStops', 'Buildings', 'Users', 'TourSections', 'PlacardDialogs') as $controller) {
     require_once APPPATH . "controllers/{$controller}_API.php";
 }
 // Models extend CI_Model; stubbed so their methods can be called with a
@@ -61,6 +61,7 @@ class CI_Model
 require_once APPPATH . 'models/Auth_Model.php';
 require_once APPPATH . 'models/Users_Model.php';
 require_once APPPATH . 'models/Email_Model.php';
+require_once APPPATH . 'models/Elevators_Model.php';
 require_once APPPATH . 'models/Nodes_Model.php';
 require_once APPPATH . 'models/TourStops_Model.php';
 require_once __DIR__ . '/support/FakeDb.php';

@@ -2,6 +2,8 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 require_once APPPATH . 'libraries/Neighbor_links.php';
+// For Elevators_Model::parseFloors; CI's loader skips an already-declared class.
+require_once APPPATH . 'models/Elevators_Model.php';
 
 // The most complex resource — same bidirectional neighbor-link pattern
 // as TourStops_Model, plus:
@@ -18,7 +20,14 @@ require_once APPPATH . 'libraries/Neighbor_links.php';
 class Nodes_Model extends CI_Model
 {
     private $table = 'nodes';
-    private $allowedMarkerTypes = array('room', 'facility', 'exit', 'hydrant');
+    private $allowedMarkerTypes = array('room', 'facility', 'exit', 'hydrant', 'elevator');
+
+    // GD1/GD2/GD3 are separate buildings but one physical campus (see
+    // buildingStore.js's own HARDCODED_IDS on the frontend for the same
+    // distinction) — a campus entrance flagged on any of the three clears
+    // it on the other two as well. Any other building is its own,
+    // single-building campus.
+    private $mainCampusBuildingIds = array('gd1', 'gd2', 'gd3');
 
     public function __construct()
     {
@@ -45,6 +54,7 @@ class Nodes_Model extends CI_Model
             $node['neighbors'] = isset($neighborsByNode[$id]) ? $neighborsByNode[$id] : array();
             $node['markers'] = isset($markersByNode[$id]) ? $markersByNode[$id] : array();
             $node['rooms'] = isset($roomsByNode[$id]) ? $roomsByNode[$id] : array();
+            $node['leads_to_floors'] = Elevators_Model::parseFloors(isset($node['leads_to_floors']) ? $node['leads_to_floors'] : null);
         }
         unset($node);
 
@@ -67,6 +77,7 @@ class Nodes_Model extends CI_Model
         $row['neighbors'] = isset($neighborsByNode[$id]) ? $neighborsByNode[$id] : array();
         $row['markers'] = isset($markersByNode[$id]) ? $markersByNode[$id] : array();
         $row['rooms'] = isset($roomsByNode[$id]) ? $roomsByNode[$id] : array();
+        $row['leads_to_floors'] = Elevators_Model::parseFloors(isset($row['leads_to_floors']) ? $row['leads_to_floors'] : null);
 
         return $row;
     }
@@ -93,23 +104,30 @@ class Nodes_Model extends CI_Model
         return $this->neighborLinks()->groupedByOwner($onlyNodeId);
     }
 
+    // An elevator marker's label and floors are joined in from `elevators`
+    // on every read rather than copied onto the marker, so all landings of
+    // one elevator always agree.
     private function _getMarkersGrouped($onlyNodeId = null)
     {
-        $this->db->select('*');
+        $this->db->select('node_markers.*, elevators.label AS elevator_label, elevators.accessible_floors AS elevator_floors');
         $this->db->from('node_markers');
+        $this->db->join('elevators', 'elevators.id = node_markers.elevator_id', 'left');
         if ($onlyNodeId !== null) {
-            $this->db->where('node_id', $onlyNodeId);
+            $this->db->where('node_markers.node_id', $onlyNodeId);
         }
         $rows = $this->db->get()->result_array();
 
         $grouped = array();
         foreach ($rows as $row) {
+            $isElevator = $row['type'] === 'elevator' && $row['elevator_label'] !== null;
             $grouped[$row['node_id']][] = array(
                 'id' => $row['id'],
                 'type' => $row['type'],
-                'label' => $row['label'],
+                'label' => $isElevator ? $row['elevator_label'] : $row['label'],
                 'yaw' => $row['yaw'],
                 'pitch' => $row['pitch'],
+                'elevator_id' => $row['elevator_id'],
+                'accessible_floors' => $isElevator ? Elevators_Model::parseFloors($row['elevator_floors']) : array(),
             );
         }
         return $grouped;
@@ -175,7 +193,7 @@ class Nodes_Model extends CI_Model
     // before saving, and NodeEditorPage.jsx selects that exact id
     // immediately after creating, without waiting for a server response
     // — same reasoning and contract as TourStops_Model::create.
-    public function create($name, $building, $floor, $type, $photoPath = null, $requestedId = null, $leadsToFloor = null)
+    public function create($name, $building, $floor, $type, $photoPath = null, $requestedId = null, array $leadsToFloors = array())
     {
         $id = !empty($requestedId) ? $requestedId : $this->generateUniqueId($building, $floor, $type);
         $now = date('Y-m-d H:i:s');
@@ -192,8 +210,8 @@ class Nodes_Model extends CI_Model
         if (!empty($photoPath)) {
             $data['photo_path'] = $photoPath;
         }
-        if ($leadsToFloor !== null && $leadsToFloor !== '') {
-            $data['leads_to_floor'] = $leadsToFloor;
+        if (!empty($leadsToFloors)) {
+            $data['leads_to_floors'] = Elevators_Model::joinFloors($leadsToFloors);
         }
 
         $this->db->insert($this->table, $data);
@@ -214,8 +232,22 @@ class Nodes_Model extends CI_Model
         return $this->find($newId);
     }
 
+    // Every building id in the same campus as $buildingId — the GD1/GD2/GD3
+    // cluster if it's one of those three, otherwise just itself (a
+    // single-building campus, e.g. Digital Campus).
+    private function campusBuildingIds($buildingId)
+    {
+        if (in_array($buildingId, $this->mainCampusBuildingIds, true)) {
+            return $this->mainCampusBuildingIds;
+        }
+        return array($buildingId);
+    }
+
     public function update($id, $data)
     {
+        if (array_key_exists('leads_to_floors', $data)) {
+            $data['leads_to_floors'] = empty($data['leads_to_floors']) ? null : Elevators_Model::joinFloors($data['leads_to_floors']);
+        }
         $data['updated_at'] = date('Y-m-d H:i:s');
         $this->db->where('id', $id);
         $this->db->update($this->table, $data);
@@ -228,6 +260,24 @@ class Nodes_Model extends CI_Model
             $this->db->where('floor', $node['floor']);
             $this->db->where('id !=', $id);
             $this->db->update($this->table, array('is_starting_node' => 0));
+        }
+
+        // One campus entrance per campus: flagging this one clears the flag
+        // on every other node in the same campus (GD1/GD2/GD3 count as one).
+        if ($node && !empty($data['is_campus_entrance'])) {
+            $this->db->where_in('building', $this->campusBuildingIds($node['building']));
+            $this->db->where('id !=', $id);
+            $this->db->update($this->table, array('is_campus_entrance' => 0));
+        }
+
+        // One building entrance per building: flagging this one clears the
+        // flag on the rest of its own building only (narrower scope than
+        // campus entrance — a building entrance never crosses into GD2/GD3
+        // just because they share a campus).
+        if ($node && !empty($data['is_building_entrance'])) {
+            $this->db->where('building', $node['building']);
+            $this->db->where('id !=', $id);
+            $this->db->update($this->table, array('is_building_entrance' => 0));
         }
         return $node;
     }
@@ -259,22 +309,44 @@ class Nodes_Model extends CI_Model
         return $this->neighborLinks()->setAngle($nodeId, $neighborId, $yaw, $pitch);
     }
 
-    // ---------- Markers (room / facility / exit / hydrant — no photos) ----------
+    // The arrival view for this one edge only — see
+    // Neighbor_links::setDefaultView. $yaw/$pitch null clears it.
+    public function updateNeighborDefaultView($nodeId, $neighborId, $yaw, $pitch)
+    {
+        return $this->neighborLinks()->setDefaultView($nodeId, $neighborId, $yaw, $pitch);
+    }
+
+    // ---------- Markers (room / facility / exit / hydrant / elevator — no photos) ----------
 
     public function isValidMarkerType($type)
     {
         return in_array($type, $this->allowedMarkerTypes, true);
     }
 
-    public function addMarker($nodeId, $type, $label, $yaw, $pitch)
+    // The raw row (stored label, elevator_id), or null.
+    public function findMarker($markerId)
     {
-        $this->db->insert('node_markers', array(
+        $this->db->select('*');
+        $this->db->from('node_markers');
+        $this->db->where('id', $markerId);
+        return $this->db->get()->row_array();
+    }
+
+    // $elevatorId is only set for the 'elevator' type; other types leave
+    // the column NULL.
+    public function addMarker($nodeId, $type, $label, $yaw, $pitch, $elevatorId = null)
+    {
+        $data = array(
             'node_id' => $nodeId,
             'type' => $type,
             'label' => $label,
             'yaw' => $yaw,
             'pitch' => $pitch,
-        ));
+        );
+        if ($elevatorId !== null) {
+            $data['elevator_id'] = $elevatorId;
+        }
+        $this->db->insert('node_markers', $data);
         return $this->db->insert_id();
     }
 

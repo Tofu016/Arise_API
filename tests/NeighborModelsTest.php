@@ -89,14 +89,43 @@ class NeighborModelsTest extends TestCase
         ), $model->db->log);
     }
 
+    /** @dataProvider models */
+    public function testUpdateNeighborDefaultViewTouchesOnlyTheOneDirection($class, $edges, $owner)
+    {
+        $model = $this->model($class);
+
+        $result = $model->updateNeighborDefaultView('a', 'b', 33, 44);
+
+        $this->assertTrue($result);
+        $this->assertSame(array(
+            array('where', $owner, 'a'),
+            array('where', 'neighbor_id', 'b'),
+            array('update', $edges, array('default_yaw' => 33, 'default_pitch' => 44)),
+        ), $model->db->log);
+    }
+
+    /** @dataProvider models */
+    public function testUpdateNeighborDefaultViewAcceptsNullToClearIt($class, $edges, $owner)
+    {
+        $model = $this->model($class);
+
+        $model->updateNeighborDefaultView('a', 'b', null, null);
+
+        $this->assertSame(array(
+            array('where', $owner, 'a'),
+            array('where', 'neighbor_id', 'b'),
+            array('update', $edges, array('default_yaw' => null, 'default_pitch' => null)),
+        ), $model->db->log);
+    }
+
     // ---- reads -----------------------------------------------------
 
     private function edges($owner)
     {
         return array(
-            array('id' => 1, $owner => 'a', 'neighbor_id' => 'b', 'yaw' => 1.5, 'pitch' => 2.5),
-            array('id' => 2, $owner => 'a', 'neighbor_id' => 'c', 'yaw' => 3.0, 'pitch' => 4.0),
-            array('id' => 3, $owner => 'b', 'neighbor_id' => 'a', 'yaw' => 5.0, 'pitch' => 6.0),
+            array('id' => 1, $owner => 'a', 'neighbor_id' => 'b', 'yaw' => 1.5, 'pitch' => 2.5, 'default_yaw' => 9.0, 'default_pitch' => -1.0),
+            array('id' => 2, $owner => 'a', 'neighbor_id' => 'c', 'yaw' => 3.0, 'pitch' => 4.0, 'default_yaw' => null, 'default_pitch' => null),
+            array('id' => 3, $owner => 'b', 'neighbor_id' => 'a', 'yaw' => 5.0, 'pitch' => 6.0, 'default_yaw' => null, 'default_pitch' => null),
         );
     }
 
@@ -109,15 +138,15 @@ class NeighborModelsTest extends TestCase
     }
 
     /** @dataProvider models */
-    public function testFindReturnsOnlyThatOwnersNeighborsWithJustAngleFields($class, $edges, $owner, $ownerTable)
+    public function testFindReturnsOnlyThatOwnersNeighborsWithTheEdgeFields($class, $edges, $owner, $ownerTable)
     {
         $model = $this->model($class, $this->tables($edges, $owner, $ownerTable));
 
         $found = $model->find('a');
 
         $this->assertSame(array(
-            array('neighbor_id' => 'b', 'yaw' => 1.5, 'pitch' => 2.5),
-            array('neighbor_id' => 'c', 'yaw' => 3.0, 'pitch' => 4.0),
+            array('neighbor_id' => 'b', 'yaw' => 1.5, 'pitch' => 2.5, 'default_yaw' => 9.0, 'default_pitch' => -1.0),
+            array('neighbor_id' => 'c', 'yaw' => 3.0, 'pitch' => 4.0, 'default_yaw' => null, 'default_pitch' => null),
         ), $found['neighbors']);
     }
 

@@ -59,6 +59,13 @@ class TourStopsActionsTest extends ActionTestCase
             'updateNeighborAngle: no pitch' => array('updateNeighborAngle', array(), array('stop_id' => 'a', 'neighbor_id' => 'b', 'yaw' => 1), $this->stops(), 400, 'Missing field: pitch'),
             'updateNeighborAngle: valid' => array('updateNeighborAngle', array(), array('stop_id' => 'a', 'neighbor_id' => 'b', 'yaw' => 1, 'pitch' => 2), $this->stops(), 200, null),
 
+            'updateNeighborDefaultView: no stop_id' => array('updateNeighborDefaultView', array(), array('neighbor_id' => 'b', 'default_yaw' => 1, 'default_pitch' => 2), $this->stops(), 400, 'Missing field: stop_id'),
+            'updateNeighborDefaultView: no default_pitch' => array('updateNeighborDefaultView', array(), array('stop_id' => 'a', 'neighbor_id' => 'b', 'default_yaw' => 1), $this->stops(), 400, 'Missing field: default_pitch'),
+            'updateNeighborDefaultView: valid' => array('updateNeighborDefaultView', array(), array('stop_id' => 'a', 'neighbor_id' => 'b', 'default_yaw' => 1, 'default_pitch' => 2), $this->stops(), 200, null),
+
+            'clearNeighborDefaultView: empty body' => array('clearNeighborDefaultView', array(), array(), $this->stops(), 400, 'stop_id and neighbor_id are both required.'),
+            'clearNeighborDefaultView: valid' => array('clearNeighborDefaultView', array(), array('stop_id' => 'a', 'neighbor_id' => 'b'), $this->stops(), 200, null),
+
             'addMarker: no stop_id' => array('addMarker', array(), array_diff_key($marker, array('stop_id' => 1)), $this->stops(), 400, 'Missing field: stop_id'),
             'addMarker: no label' => array('addMarker', array(), array_diff_key($marker, array('label' => 1)), $this->stops(), 400, 'Missing field: label'),
             'addMarker: valid' => array('addMarker', array(), $marker, $this->stops(), 200, null),

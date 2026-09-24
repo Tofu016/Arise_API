@@ -15,9 +15,20 @@ class Buildings_Model extends CI_Model
         $this->load->database();
     }
 
+    // campus_id reads through COALESCE(campus_id, id) — an untouched row is
+    // its own solo campus, same fallback constants.js's campusForBuilding
+    // already used client-side before this column existed. That means
+    // grouping buildings under a shared campus is a plain per-row UPDATE,
+    // never a backfill: every existing/future row keeps working with zero
+    // edits until an admin explicitly sets campus_id.
+    private function selectWithCampus()
+    {
+        $this->db->select('*, COALESCE(campus_id, id) AS campus_id', false);
+    }
+
     public function getAll()
     {
-        $this->db->select('*');
+        $this->selectWithCampus();
         $this->db->from($this->table);
         $this->db->order_by('name', 'ASC');
         return $this->db->get()->result_array();
@@ -25,7 +36,7 @@ class Buildings_Model extends CI_Model
 
     public function find($id)
     {
-        $this->db->select('*');
+        $this->selectWithCampus();
         $this->db->from($this->table);
         $this->db->where('id', $id);
         return $this->db->get()->row_array();
@@ -53,8 +64,10 @@ class Buildings_Model extends CI_Model
 
     // lat/lng genuinely nullable — only buildings on a physically
     // separate campus have coordinates set, matching the schema's own
-    // documented reasoning.
-    public function create($name, $floorCount, $lat = null, $lng = null)
+    // documented reasoning. campus_id is separately nullable too — it's
+    // pure grouping (see selectWithCampus()), not a location, so a building
+    // can leave it unset (solo campus) independent of whether it has coords.
+    public function create($name, $floorCount, $lat = null, $lng = null, $campusId = null)
     {
         $id = $this->generateUniqueId($name);
         $now = date('Y-m-d H:i:s');
@@ -72,6 +85,9 @@ class Buildings_Model extends CI_Model
         if ($lng !== null && $lng !== '') {
             $data['lng'] = $lng;
         }
+        if ($campusId !== null && $campusId !== '') {
+            $data['campus_id'] = $campusId;
+        }
 
         $this->db->insert($this->table, $data);
         return $this->find($id);
@@ -79,6 +95,12 @@ class Buildings_Model extends CI_Model
 
     public function update($id, $data)
     {
+        // An empty-string campus_id means "un-group me" — must land as SQL
+        // NULL, not '', or selectWithCampus()'s COALESCE would stop falling
+        // back to the building's own id and treat '' as a real campus.
+        if (array_key_exists('campus_id', $data) && $data['campus_id'] === '') {
+            $data['campus_id'] = null;
+        }
         $data['updated_at'] = date('Y-m-d H:i:s');
         $this->db->where('id', $id);
         $this->db->update($this->table, $data);

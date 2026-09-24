@@ -13,6 +13,8 @@ class FakeDb
     public $tables = array();
 
     private $from;
+    private $select = null;
+    private $joins = array();
     private $wheres = array();
     private $orders = array();
     private $sets = array();
@@ -22,6 +24,17 @@ class FakeDb
     public function select($columns = '*')
     {
         $this->log[] = array('select', $columns);
+        $this->select = $columns;
+        return $this;
+    }
+
+    // Only "a.col = b.col" conditions are understood. With a join pending,
+    // where()/order_by() keys may be table-qualified, and select()'s
+    // "t.*", "t.col" and "t.col AS alias" items shape the returned rows.
+    public function join($table, $condition, $type = '')
+    {
+        $this->joins[] = array($table, $condition, strtolower($type));
+        $this->log[] = array('join', $table, $condition, $type);
         return $this;
     }
 
@@ -72,6 +85,10 @@ class FakeDb
     {
         $table = $table !== null ? $table : $this->from;
         $this->log[] = array('get', $table);
+
+        if ($this->joins) {
+            return $this->joinedGet($table);
+        }
 
         $rows = array();
         foreach ($this->matchingIndexes($table) as $i) {
@@ -142,6 +159,105 @@ class FakeDb
         return 1;
     }
 
+    // Builds one combined row per match (base columns bare and qualified,
+    // joined columns qualified only; a LEFT join with no match adds none),
+    // then filters, orders, limits and projects them.
+    private function joinedGet($table)
+    {
+        $combined = array();
+        foreach (isset($this->tables[$table]) ? $this->tables[$table] : array() as $base) {
+            $row = $base;
+            foreach ($base as $col => $value) {
+                $row["{$table}.{$col}"] = $value;
+            }
+            $keep = true;
+            foreach ($this->joins as $join) {
+                list($joinTable, $condition, $type) = $join;
+                $match = $this->joinMatch($row, $joinTable, $condition);
+                if ($match === null) {
+                    $keep = $type === 'left';
+                    if (!$keep) {
+                        break;
+                    }
+                    continue;
+                }
+                foreach ($match as $col => $value) {
+                    $row["{$joinTable}.{$col}"] = $value;
+                }
+            }
+            if (!$keep) {
+                continue;
+            }
+            $matches = true;
+            foreach ($this->wheres as $where) {
+                if (!$this->satisfies($row, $where[0], $where[1])) {
+                    $matches = false;
+                    break;
+                }
+            }
+            if ($matches) {
+                $combined[] = $row;
+            }
+        }
+
+        $combined = $this->ordered($combined);
+        if ($this->limit !== null) {
+            $combined = array_slice($combined, 0, $this->limit);
+        }
+        $rows = array_map(function ($row) use ($table) {
+            return $this->project($row, $table);
+        }, $combined);
+        $this->reset();
+
+        return new FakeDbResult($rows);
+    }
+
+    private function joinMatch(array $row, $joinTable, $condition)
+    {
+        list($left, $right) = array_map('trim', explode('=', $condition));
+        // Whichever side names the joined table is looked up in it; the
+        // other side is read from the row built so far.
+        if (strpos($left, "{$joinTable}.") !== 0) {
+            list($left, $right) = array($right, $left);
+        }
+        $joinCol = substr($left, strlen($joinTable) + 1);
+        $value = array_key_exists($right, $row) ? $row[$right] : null;
+        if ($value === null) {
+            return null;
+        }
+        foreach (isset($this->tables[$joinTable]) ? $this->tables[$joinTable] : array() as $candidate) {
+            if (array_key_exists($joinCol, $candidate) && $candidate[$joinCol] === $value) {
+                return $candidate;
+            }
+        }
+        return null;
+    }
+
+    private function project(array $row, $table)
+    {
+        $select = $this->select === null ? '*' : $this->select;
+        $out = array();
+        foreach (array_map('trim', explode(',', $select)) as $item) {
+            if ($item === '*') {
+                $item = "{$table}.*";
+            }
+            if (preg_match('/^(\w+)\.\*$/', $item, $m)) {
+                $prefix = $m[1] . '.';
+                foreach ($row as $key => $value) {
+                    if (strpos($key, $prefix) === 0) {
+                        $out[substr($key, strlen($prefix))] = $value;
+                    }
+                }
+            } elseif (preg_match('/^([\w.]+)\s+AS\s+(\w+)$/i', $item, $m)) {
+                $out[$m[2]] = array_key_exists($m[1], $row) ? $row[$m[1]] : null;
+            } else {
+                $name = strpos($item, '.') !== false ? substr($item, strrpos($item, '.') + 1) : $item;
+                $out[$name] = array_key_exists($item, $row) ? $row[$item] : null;
+            }
+        }
+        return $out;
+    }
+
     // Indexes into $tables[$table] of the rows every pending where() matches.
     private function matchingIndexes($table)
     {
@@ -166,7 +282,7 @@ class FakeDb
     // like compare, and never match a NULL column.
     private function satisfies(array $row, $key, $value)
     {
-        preg_match('/^(\w+)\s*(<=|>=|<|>|!=)?$/', $key, $m);
+        preg_match('/^([\w.]+)\s*(<=|>=|<|>|!=)?$/', $key, $m);
         $column = $m[1];
         $operator = isset($m[2]) ? $m[2] : '';
 
@@ -216,6 +332,8 @@ class FakeDb
     private function reset()
     {
         $this->from = null;
+        $this->select = null;
+        $this->joins = array();
         $this->wheres = array();
         $this->orders = array();
         $this->sets = array();

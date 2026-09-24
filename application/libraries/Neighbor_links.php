@@ -72,9 +72,25 @@ class Neighbor_links
         ));
     }
 
+    // Sets the camera view (yaw/pitch) a visitor should land facing when
+    // they arrive at $to via this specific edge — independent of the
+    // arrow's own angle, and independent of the reverse edge, same shape
+    // as setAngle(). Null clears it back to "no override" (the arrival
+    // falls back to whatever the caller does by default).
+    public function setDefaultView($from, $to, $yaw, $pitch)
+    {
+        $this->db->where($this->ownerColumn, $from);
+        $this->db->where('neighbor_id', $to);
+        return $this->db->update($this->table, array(
+            'default_yaw' => $yaw,
+            'default_pitch' => $pitch,
+        ));
+    }
+
     // Every edge, or only those owned by $onlyOwner, as
-    // array(ownerId => list of array('neighbor_id', 'yaw', 'pitch')).
-    // One query however many owners there are, grouped in PHP.
+    // array(ownerId => list of array('neighbor_id', 'yaw', 'pitch',
+    // 'default_yaw', 'default_pitch')). One query however many owners
+    // there are, grouped in PHP.
     public function groupedByOwner($onlyOwner = null)
     {
         $this->db->select('*');
@@ -90,6 +106,8 @@ class Neighbor_links
                 'neighbor_id' => $row['neighbor_id'],
                 'yaw' => $row['yaw'],
                 'pitch' => $row['pitch'],
+                'default_yaw' => $row['default_yaw'],
+                'default_pitch' => $row['default_pitch'],
             );
         }
         return $grouped;

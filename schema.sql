@@ -58,9 +58,25 @@ CREATE TABLE `buildings` (
   `floor_count` int(10) unsigned NOT NULL,
   `lat` decimal(10,7) DEFAULT NULL,
   `lng` decimal(10,7) DEFAULT NULL,
+  `campus_id` varchar(64) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `elevators`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `elevators` (
+  `id` varchar(64) NOT NULL,
+  `label` varchar(255) NOT NULL,
+  `building` varchar(64) NOT NULL,
+  `accessible_floors` varchar(255) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `building` (`building`),
+  CONSTRAINT `elevators_ibfk_1` FOREIGN KEY (`building`) REFERENCES `buildings` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `email_queue`;
@@ -85,13 +101,16 @@ DROP TABLE IF EXISTS `node_markers`;
 CREATE TABLE `node_markers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `node_id` varchar(64) NOT NULL,
-  `type` enum('room','facility','exit','hydrant') NOT NULL,
+  `type` enum('room','facility','exit','hydrant','elevator') NOT NULL,
   `label` varchar(255) NOT NULL,
   `yaw` float NOT NULL,
   `pitch` float NOT NULL,
+  `elevator_id` varchar(64) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `node_markers_ibfk_1` (`node_id`),
-  CONSTRAINT `node_markers_ibfk_1` FOREIGN KEY (`node_id`) REFERENCES `nodes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  KEY `node_markers_ibfk_2` (`elevator_id`),
+  CONSTRAINT `node_markers_ibfk_1` FOREIGN KEY (`node_id`) REFERENCES `nodes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `node_markers_ibfk_2` FOREIGN KEY (`elevator_id`) REFERENCES `elevators` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `node_neighbors`;
@@ -103,6 +122,8 @@ CREATE TABLE `node_neighbors` (
   `neighbor_id` varchar(64) NOT NULL,
   `yaw` float NOT NULL,
   `pitch` float NOT NULL,
+  `default_yaw` float DEFAULT NULL,
+  `default_pitch` float DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_node_edge` (`node_id`,`neighbor_id`),
   KEY `node_neighbors_ibfk_2` (`neighbor_id`),
@@ -131,8 +152,12 @@ CREATE TABLE `nodes` (
   `building` varchar(64) NOT NULL,
   `floor` int(11) NOT NULL,
   `type` varchar(64) NOT NULL,
-  `leads_to_floor` int(11) DEFAULT NULL,
+  `leads_to_floors` varchar(255) DEFAULT NULL,
   `is_starting_node` tinyint(1) NOT NULL DEFAULT 0,
+  `starting_view_yaw` float DEFAULT NULL,
+  `starting_view_pitch` float DEFAULT NULL,
+  `is_campus_entrance` tinyint(1) NOT NULL DEFAULT 0,
+  `is_building_entrance` tinyint(1) NOT NULL DEFAULT 0,
   `photo_path` varchar(500) DEFAULT NULL,
   `flowchart_position_x` float DEFAULT NULL,
   `flowchart_position_y` float DEFAULT NULL,
@@ -238,6 +263,8 @@ CREATE TABLE `tour_stop_neighbors` (
   `neighbor_id` varchar(64) NOT NULL,
   `yaw` float NOT NULL,
   `pitch` float NOT NULL,
+  `default_yaw` float DEFAULT NULL,
+  `default_pitch` float DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_tour_stop_edge` (`tour_stop_id`,`neighbor_id`),
   KEY `tour_stop_neighbors_ibfk_2` (`neighbor_id`),
