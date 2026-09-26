@@ -22,7 +22,11 @@ user_guide_src/cilexer/pycilexer.egg-info/*
 # database.php is now env-driven (values come from .env, no secrets in
 # the file) so it is committed — deployments must not have to hand-edit it.
 vendor/
-uploads/
+
+# Public tour photos — user data, never committed. Only the folder's own
+# .htaccess (CORS + hardening) is, so every deployment gets it.
+/uploads/*
+!/uploads/.htaccess
 
 # Protected indoor uploads — contents are user data, never committed
 /protected-uploads/*

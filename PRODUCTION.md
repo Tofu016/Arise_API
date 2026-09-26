@@ -43,8 +43,11 @@ development value.
 - **Apache**: `mod_rewrite` on and `AllowOverride All`, so the root
   `.htaccess` can forward the `Authorization` header. Deny web access to
   `.env`, `.git`, `*.sql`, `*.md`, `composer.lock` and `protected-uploads/`
-  (DEPLOY.md A7 and A8), and check with `curl -I`. Disable directory
-  listing and PHP execution under `uploads/`.
+  (DEPLOY.md A7 and A8), and check with `curl -I`. `mod_headers` on:
+  the committed `uploads/.htaccess` sends CORS for the public tour photos
+  and turns off directory listing and script execution there — confirm
+  with `curl -I` that a photo carries `Access-Control-Allow-Origin: *`
+  and that a request for `uploads/` itself is refused.
 - **Scheduled jobs** (DEPLOY.md A10 and A10b, CLI only): `processEmails`
   every couple of minutes, `purgeExpired` daily.
 - **Backups** of the database, `uploads/`, `protected-uploads/` and the
@@ -78,8 +81,9 @@ These are real, and the code does not handle them today.
 - **`IndoorUploads_API/serve` is public.** Indoor photos are called
   "protected" but are streamed to anyone who knows the path. Either decide
   they are public and update the wording, or put an auth check back.
-- **One CORS origin.** If the admin site and a public site will live on
-  different origins, the code needs an allow-list.
+- **One CORS origin for the API.** `CORS_ORIGIN` accepts a comma-separated
+  list, and public tour photos in `uploads/` allow any origin; but the
+  password-reset link always points at the first origin listed.
 - **No security headers** (`X-Content-Type-Options: nosniff` and the like)
   are sent by the API. Add them in Apache.
 - **CodeIgniter 3.1.13** is the last CI3 release and supports PHP up to

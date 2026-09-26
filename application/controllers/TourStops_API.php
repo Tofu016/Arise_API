@@ -49,6 +49,8 @@ class TourStops_API extends MY_Controller
             return Api_response::fail(409, "ID '{$requestedId}' is already used by another stop.");
         }
 
+        $this->requirePhotoPathIn(isset($data['photo_path']) ? $data['photo_path'] : null, 'tourpanorama');
+
         $stop = $this->TourStops_Model->create(
             $name,
             isset($data['section_id']) ? $data['section_id'] : null,
@@ -100,6 +102,16 @@ class TourStops_API extends MY_Controller
         // class of input from any caller, not just that one.
         if (isset($patch['section_id']) && $patch['section_id'] === '') {
             $patch['section_id'] = null;
+        }
+
+        // Checked only when the photo actually changes: the admin form
+        // sends every field on save, and a stop stored before this rule
+        // must stay editable.
+        if (array_key_exists('photo_path', $patch)) {
+            $current = $this->TourStops_Model->find($id);
+            if (!$current || $patch['photo_path'] !== $current['photo_path']) {
+                $this->requirePhotoPathIn($patch['photo_path'], 'tourpanorama');
+            }
         }
 
         $stop = $this->TourStops_Model->update($id, $patch);

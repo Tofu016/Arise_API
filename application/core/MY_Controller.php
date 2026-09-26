@@ -6,6 +6,10 @@ defined('BASEPATH') or exit('No direct script access allowed');
 require_once APPPATH . 'libraries/Api_response.php';
 require_once APPPATH . 'libraries/Api_input.php';
 require_once APPPATH . 'libraries/Auth_session.php';
+// Only for its static Photo_store::isPhotoPath() check; photoStore() still
+// loads the instance through CI (the loader creates it when the class is
+// already declared but not yet attached to the controller).
+require_once APPPATH . 'libraries/Photo_store.php';
 
 // Shared base every API controller should extend instead of
 // CI_Controller directly — CodeIgniter 3's own, documented extension
@@ -171,12 +175,46 @@ class MY_Controller extends CI_Controller
                 'public_root' => !empty($_ENV['UPLOAD_ROOT'])
                     ? $_ENV['UPLOAD_ROOT']
                     : FCPATH . 'uploads/',
-                'protected_root' => !empty($_ENV['PROTECTED_UPLOAD_ROOT'])
-                    ? $_ENV['PROTECTED_UPLOAD_ROOT']
-                    : dirname(FCPATH, 2) . '/protected-uploads/',
+                'protected_root' => $this->protectedUploadRoot(),
             ));
         }
         return $this->photo_store;
+    }
+
+    // Downscaled JPEG copies of Photos for the mobile app (see
+    // Photo_preview). Cached under the protected root, so the copies are
+    // exactly as unreachable by a direct web request as the originals;
+    // "_previews" is not a Photo_store category, so it can never collide
+    // with a Photo path or show up in the gallery.
+    protected function photoPreview()
+    {
+        if (!isset($this->photo_preview)) {
+            $this->load->library('Photo_preview', array(
+                'cache_root' => $this->protectedUploadRoot() . '_previews/',
+            ));
+        }
+        return $this->photo_preview;
+    }
+
+    private function protectedUploadRoot()
+    {
+        $root = !empty($_ENV['PROTECTED_UPLOAD_ROOT'])
+            ? $_ENV['PROTECTED_UPLOAD_ROOT']
+            : dirname(FCPATH, 2) . '/protected-uploads/';
+        return rtrim($root, '/\\') . '/';
+    }
+
+    // Stops the action with a 400 unless $path is empty (no photo) or a
+    // Photo path in $category — i.e. something save() actually produced,
+    // not a guessed file name. $field names the body field in the message.
+    protected function requirePhotoPathIn($path, $category, $field = 'photo_path')
+    {
+        if ($path === null || $path === '') {
+            return;
+        }
+        if (!Photo_store::isPhotoPath($path, $category)) {
+            throw new Api_abort(Api_response::fail(400, "{$field} must be an uploaded photo ({$category}/…); upload the photo instead of entering a file name."));
+        }
     }
 
     // Saves the uploaded image as a Photo in $category and returns the

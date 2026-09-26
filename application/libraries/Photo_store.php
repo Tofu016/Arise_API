@@ -122,7 +122,7 @@ class Photo_store
         $dir = $this->rootFor($def) . $category . '/';
         $relative = $category . '/';
         if ($def['layout'] === 'per-building') {
-            $safeBuilding = $this->safeSegment($building);
+            $safeBuilding = self::safeSegment($building);
             if ($safeBuilding === false) {
                 return $this->fail(400, 'Invalid or missing building.');
             }
@@ -132,7 +132,7 @@ class Photo_store
 
         $requested = $name !== null ? $name : (isset($file['name']) ? $file['name'] : '');
         $safeBase = is_string($requested)
-            ? $this->safeSegment(basename(pathinfo($requested, PATHINFO_FILENAME)))
+            ? self::safeSegment(basename(pathinfo($requested, PATHINFO_FILENAME)))
             : false;
         if ($safeBase === false) {
             return $this->fail(400, 'Invalid filename.');
@@ -166,7 +166,7 @@ class Photo_store
         }
         $segments = explode('/', $path);
         foreach ($segments as $segment) {
-            if ($this->safeSegment($segment) === false) {
+            if (self::safeSegment($segment) === false) {
                 return $this->invalidPath();
             }
         }
@@ -194,6 +194,29 @@ class Photo_store
             'visibility' => $def['visibility'],
             'content_type' => isset(self::EXT_TO_MIME[$ext]) ? self::EXT_TO_MIME[$ext] : 'application/octet-stream',
         );
+    }
+
+    // Whether $path is shaped like a Photo path in $category — the right
+    // first segment, depth and safe segments — without touching the disk.
+    // For checking a path before a record stores it (a Photo path always
+    // comes from save(); a bare "stop_01.jpg" never does). resolve() is the
+    // one that also needs the file to exist.
+    public static function isPhotoPath($path, $category)
+    {
+        if (!is_string($path) || !isset(self::CATEGORIES[$category])) {
+            return false;
+        }
+        $segments = explode('/', $path);
+        if ($segments[0] !== $category) {
+            return false;
+        }
+        foreach ($segments as $segment) {
+            if (self::safeSegment($segment) === false) {
+                return false;
+            }
+        }
+        $expected = self::CATEGORIES[$category]['layout'] === 'flat' ? 2 : 3;
+        return count($segments) === $expected;
     }
 
     // Deletes a Photo's file. Knows nothing about whether it is in use —
@@ -277,7 +300,7 @@ class Photo_store
     // composed entirely of allowed characters), so a path of ".."
     // segments would otherwise escape the root. A real bug caught during
     // review, not defensive-only code.
-    private function safeSegment($segment)
+    private static function safeSegment($segment)
     {
         if (!is_string($segment)) {
             return false;

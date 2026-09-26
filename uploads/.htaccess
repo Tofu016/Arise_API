@@ -1,0 +1,28 @@
+# Public tour photos, served straight from disk by Apache (bypassing PHP) —
+# see Photo_store's 'public' categories. Committed on purpose, so every
+# deployment gets it: the rest of uploads/ is user data and ignored.
+# Needs AllowOverride All, which PRODUCTION.md already requires.
+
+# CORS. The web app loads these as WebGL textures (the 360° sphere), and
+# browsers enforce CORS on any image whose pixels are read into WebGL —
+# unlike a plain <img>. Every file here is public and served without
+# cookies or auth, so any origin may read it: nothing to protect, and no
+# origin to keep in sync with CORS_ORIGIN in .env (this used to hard-code
+# http://localhost:5173, which blocked every deployed front-end).
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+</IfModule>
+
+# Hardening (PRODUCTION.md): no directory listings, and nothing here is ever
+# executed as a script — uploads are forced to image extensions already,
+# this is the second line of defence.
+Options -Indexes
+<FilesMatch "\.(php[0-9]?|phtml|phar|pl|py|cgi|sh)$">
+    Require all denied
+</FilesMatch>
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>

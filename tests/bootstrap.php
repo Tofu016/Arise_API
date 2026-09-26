@@ -7,6 +7,7 @@ define('APPPATH', __DIR__ . '/../application/');
 
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once APPPATH . 'libraries/Photo_store.php';
+require_once APPPATH . 'libraries/Photo_preview.php';
 require_once APPPATH . 'libraries/Api_response.php';
 require_once APPPATH . 'libraries/Photo_references.php';
 require_once APPPATH . 'libraries/Api_input.php';

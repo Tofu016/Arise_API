@@ -59,6 +59,8 @@ class Nodes_API extends MY_Controller
             return Api_response::fail(409, "ID '{$requestedId}' is already used by another node.");
         }
 
+        $this->requirePhotoPathIn(isset($data['photo_path']) ? $data['photo_path'] : null, 'panoramas');
+
         $leadsToFloors = $this->parseLeadsToFloors(isset($data['leads_to_floors']) ? $data['leads_to_floors'] : null);
         if ($leadsToFloors === null) {
             return Api_response::fail(400, 'leads_to_floors must be a list of distinct whole-number floors.');
@@ -116,6 +118,16 @@ class Nodes_API extends MY_Controller
         // actually part of this particular update.
         if (isset($patch['building']) && !$this->Buildings_Model->find($patch['building'])) {
             return Api_response::fail(400, "Building '{$patch['building']}' does not exist.");
+        }
+
+        // Checked only when the photo actually changes: the admin form
+        // sends every field on save, and a node stored before this rule
+        // must stay editable.
+        if (array_key_exists('photo_path', $patch)) {
+            $current = $this->Nodes_Model->find($id);
+            if (!$current || $patch['photo_path'] !== $current['photo_path']) {
+                $this->requirePhotoPathIn($patch['photo_path'], 'panoramas');
+            }
         }
 
         if (array_key_exists('leads_to_floors', $patch)) {
