@@ -450,6 +450,33 @@ fine). Until applied, `Nodes_API create`/`update` fail (unknown column
 first. Not additive like the others above, since it also renames the
 column — deploy the code and the migration together.
 
+**Saved rooms** — adds the `saved_rooms` table behind `SavedRooms_API`
+(the mobile app's bookmark on a room card): which rooms each account has
+saved, pointing at the room's details record so a rename doesn't break it.
+Rows go with their user or the room's details (`ON DELETE CASCADE`):
+
+```sql
+CREATE TABLE saved_rooms (
+  id                int(10) unsigned NOT NULL AUTO_INCREMENT,
+  user_id           int(10) unsigned NOT NULL,
+  placard_dialog_id int(10) unsigned NOT NULL,
+  created_at        datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (id),
+  UNIQUE KEY user_room (user_id, placard_dialog_id),
+  KEY placard_dialog_id (placard_dialog_id),
+  CONSTRAINT saved_rooms_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT saved_rooms_ibfk_2 FOREIGN KEY (placard_dialog_id) REFERENCES placard_dialogs (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+```bash
+mysql -u arise -p arise_web -e "CREATE TABLE saved_rooms (id int(10) unsigned NOT NULL AUTO_INCREMENT, user_id int(10) unsigned NOT NULL, placard_dialog_id int(10) unsigned NOT NULL, created_at datetime NOT NULL DEFAULT current_timestamp(), PRIMARY KEY (id), UNIQUE KEY user_room (user_id, placard_dialog_id), KEY placard_dialog_id (placard_dialog_id), CONSTRAINT saved_rooms_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE, CONSTRAINT saved_rooms_ibfk_2 FOREIGN KEY (placard_dialog_id) REFERENCES placard_dialogs (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+```
+
+Purely additive: no existing table changes. Until it is applied, every
+`SavedRooms_API` call fails (unknown table `saved_rooms`) — the rest of the
+API is unaffected. Apply it before shipping an app build that uses it.
+
 ---
 
 ## Part C — Rollback

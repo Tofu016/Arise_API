@@ -69,6 +69,12 @@ class PlacardDialogsApiHarness extends PlacardDialogs_API
     public $modelNames = array('PlacardDialogs_Model');
 }
 
+class SavedRoomsApiHarness extends SavedRooms_API
+{
+    use ControllerHarness;
+    public $modelNames = array('SavedRooms_Model', 'PlacardDialogs_Model');
+}
+
 class AuthApiHarness extends Auth_API
 {
     use ControllerHarness;

@@ -126,6 +126,22 @@ class MY_Controller extends CI_Controller
         }
     }
 
+    // Call at the top of an action that any approved account may use (a
+    // user's own data, like saved rooms): 401 when not signed in, 403 while
+    // the account is still waiting for an admin's approval. Returns the
+    // signed-in user row. Same rules as requireAdmin() about where to call it.
+    protected function requireApprovedUser()
+    {
+        $user = $this->getCurrentUser();
+        if ($user === null) {
+            throw new Api_abort(Api_response::fail(401, 'Not signed in.'));
+        }
+        if (!in_array($user['role'], array('user', 'admin'), true)) {
+            throw new Api_abort(Api_response::fail(403, 'Your account is waiting for approval.'));
+        }
+        return $user;
+    }
+
     // Every request to a controller extending this one comes through
     // here (CodeIgniter calls _remap in place of the action). Runs the
     // action, then sends whatever Api_response it returned or a guard

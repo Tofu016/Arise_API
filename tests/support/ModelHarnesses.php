@@ -36,3 +36,12 @@ class ElevatorsModelHarness extends Elevators_Model
     {
     }
 }
+
+class SavedRoomsModelHarness extends SavedRooms_Model
+{
+    public $db;
+
+    public function __construct()
+    {
+    }
+}
