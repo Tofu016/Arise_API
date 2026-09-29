@@ -35,18 +35,41 @@ class Feedback_API extends MY_Controller
         return Api_response::ok(array('feedback' => $feedback));
     }
 
-    // GET /Feedback_API/getAll — admin only. Optional query filters (all
-    // additive, see Feedback_Model::getAll): from, to, minRating, hasComment.
+    // GET /Feedback_API/getAll (admin only). Optional query filters (all
+    // additive, see Feedback_Model::getAll): from, to, minRating, maxRating,
+    // hasComment. Paging: limit (1-100, omitted = every row), offset. sort:
+    // unreviewed (default), newest, oldest, rating_desc, rating_asc. Returns
+    // { feedback, total, unreviewedCount }, the counts covering every row
+    // matching the filters, not just this page.
     public function getAll()
     {
         $this->requireAdmin();
-        $filters = array(
+        $limit = $this->input->get('limit');
+        $limit = $limit !== null && $limit !== '' ? min(100, max(1, (int) $limit)) : null;
+        $offset = (int) $this->input->get('offset');
+        $sort = $this->input->get('sort') ?: 'unreviewed';
+        return Api_response::ok($this->Feedback_Model->getAll($this->filtersFromQuery(), $sort, $limit, $offset));
+    }
+
+    // GET /Feedback_API/ratingCounts (admin only). Same from/to/minRating/
+    // maxRating filters as getAll, minus hasComment (see
+    // Feedback_Model::ratingCounts). Returns { counts: { "1": n, ..., "5": n } }.
+    public function ratingCounts()
+    {
+        $this->requireAdmin();
+        return Api_response::ok(array('counts' => $this->Feedback_Model->ratingCounts($this->filtersFromQuery())));
+    }
+
+    // The from/to/minRating/maxRating filters getAll and ratingCounts share.
+    private function filtersFromQuery()
+    {
+        return array(
             'from' => $this->input->get('from'),
             'to' => $this->input->get('to'),
             'minRating' => $this->input->get('minRating'),
+            'maxRating' => $this->input->get('maxRating'),
             'hasComment' => $this->input->get('hasComment'),
         );
-        return Api_response::ok(array('feedback' => $this->Feedback_Model->getAll($filters)));
     }
 
     // PATCH /Feedback_API/markReviewed/{id} — admin only.
