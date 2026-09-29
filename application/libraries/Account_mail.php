@@ -17,6 +17,17 @@ class Account_mail
         );
     }
 
+    // Sent when an administrator creates an account directly (Users_API::create) —
+    // unlike welcome(), this account is never 'pending': it's usable
+    // immediately with the password the admin set.
+    public static function accountCreatedByAdmin($name)
+    {
+        return array(
+            'subject' => 'An ARISE Campus Navigator account was created for you',
+            'html' => '<p>Hi ' . htmlspecialchars($name) . ',</p><p>An administrator created an ARISE Campus Navigator account for you. You can log in now using the credentials they gave you.</p>',
+        );
+    }
+
     // Sent when an administrator moves an account out of "pending".
     public static function accountApproved($name)
     {

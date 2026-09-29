@@ -2,6 +2,7 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 require_once APPPATH . 'libraries/Account_mail.php';
+require_once APPPATH . 'libraries/Account_policy.php';
 
 // Admin-only throughout — unlike every other resource built so far,
 // nothing here is public; a user list is never navigation data.
@@ -25,6 +26,49 @@ class Users_API extends MY_Controller
         $this->requireAdmin();
         $users = $this->Users_Model->getAll();
         return Api_response::ok(array('users' => $users));
+    }
+
+    // POST /Users_API/create — admin only.
+    // Body: email, password, name, role (pending|user|admin)
+    //
+    // Distinct from Auth_API::register: that's self-service and always
+    // lands on 'pending'; this is an admin vouching for the account up
+    // front, so it can be created straight into 'user' or 'admin'.
+    public function create()
+    {
+        $this->requireAdmin();
+
+        $data = $this->getInput();
+        $email = isset($data['email']) ? trim(strtolower($data['email'])) : '';
+        $password = isset($data['password']) ? $data['password'] : '';
+        $name = isset($data['name']) ? trim($data['name']) : '';
+        $role = isset($data['role']) ? $data['role'] : '';
+
+        if ($email === '' || $password === '' || $name === '') {
+            return Api_response::fail(400, 'Email, password, and name are all required.');
+        }
+
+        if (!$this->Users_Model->isValidRole($role)) {
+            $allowed = implode(', ', $this->Users_Model->getAllowedRoles());
+            return Api_response::fail(400, "Invalid role. Must be one of: {$allowed}");
+        }
+
+        Account_policy::requireEmailDomain($email);
+        Account_policy::requirePassword($password);
+
+        if ($this->Auth_Model->emailExists($email)) {
+            return Api_response::fail(409, 'An account with this email already exists.');
+        }
+
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        $user = $this->Users_Model->create($email, $passwordHash, $name, $role);
+
+        if ($role !== 'pending') {
+            $created = Account_mail::accountCreatedByAdmin($name);
+            $this->Email_Model->enqueue($email, $created['subject'], $created['html']);
+        }
+
+        return Api_response::ok(array('user' => $user));
     }
 
     // PATCH /Users_API/updateRole/{id} — admin only.

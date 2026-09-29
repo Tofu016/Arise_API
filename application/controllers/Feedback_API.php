@@ -35,11 +35,18 @@ class Feedback_API extends MY_Controller
         return Api_response::ok(array('feedback' => $feedback));
     }
 
-    // GET /Feedback_API/getAll — admin only.
+    // GET /Feedback_API/getAll — admin only. Optional query filters (all
+    // additive, see Feedback_Model::getAll): from, to, minRating, hasComment.
     public function getAll()
     {
         $this->requireAdmin();
-        return Api_response::ok(array('feedback' => $this->Feedback_Model->getAll()));
+        $filters = array(
+            'from' => $this->input->get('from'),
+            'to' => $this->input->get('to'),
+            'minRating' => $this->input->get('minRating'),
+            'hasComment' => $this->input->get('hasComment'),
+        );
+        return Api_response::ok(array('feedback' => $this->Feedback_Model->getAll($filters)));
     }
 
     // PATCH /Feedback_API/markReviewed/{id} — admin only.

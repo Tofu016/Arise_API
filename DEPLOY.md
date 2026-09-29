@@ -280,6 +280,29 @@ CLI-only, like `processEmails`. Once a day is plenty:
 Test once by hand: `php index.php Cron_API purgeExpired` →
 `Purged: 0 login tokens, 0 reset tokens, 0 sent emails.`
 
+`Cron_API::closeStaleSessions` closes desktop Analytics sessions
+(`analytics_sessions.platform = 'desktop'`) that have gone 30 minutes with
+no new tracked event and no `ended_at` yet — a desktop visitor has no
+reliable "tab closed" signal, unlike kiosk (see useAnalytics.js), so this
+is what actually ends those sessions for the Analytics dashboard's average
+duration and funnel. Same CLI-only guard, same cadence is fine:
+
+```cron
+15 3 * * * cd /var/www/arise-api && /usr/bin/php index.php Cron_API closeStaleSessions >> /var/log/arise-cron.log 2>&1
+```
+
+A closed session's `ended_at` is its last tracked event, not the time the
+cron ran, so running it once a day doesn't skew durations. It only means
+still-open desktop sessions stay out of the average duration until the next
+run. If that lag matters, run it every 30 minutes instead:
+
+```cron
+*/30 * * * * cd /var/www/arise-api && /usr/bin/php index.php Cron_API closeStaleSessions >> /var/log/arise-cron.log 2>&1
+```
+
+Test once by hand: `php index.php Cron_API closeStaleSessions` →
+`Closed: 0 stale desktop analytics sessions.`
+
 ### A11. HTTPS
 
 Get a certificate before going live — the PWA service worker and any
@@ -476,6 +499,59 @@ mysql -u arise -p arise_web -e "CREATE TABLE saved_rooms (id int(10) unsigned NO
 Purely additive: no existing table changes. Until it is applied, every
 `SavedRooms_API` call fails (unknown table `saved_rooms`) — the rest of the
 API is unaffected. Apply it before shipping an app build that uses it.
+
+**Analytics tables** — adds `analytics_sessions` and `analytics_events`
+behind `Analytics_API` (the Analytics dashboard, replacing the plain
+Feedback admin page): one row per kiosk/desktop session, one row per
+tracked action (stage reached, room searched, go-to, directions requested,
+walk/jump, feedback submitted, session end). `analytics_sessions` must be
+created first, since `analytics_events.session_id` references it:
+
+```sql
+CREATE TABLE analytics_sessions (
+  id char(36) NOT NULL,
+  platform enum('kiosk','desktop') NOT NULL,
+  campus varchar(64) DEFAULT NULL,
+  building varchar(64) DEFAULT NULL,
+  started_at datetime NOT NULL DEFAULT current_timestamp(),
+  ended_at datetime DEFAULT NULL,
+  end_reason enum('feedback','idle_timeout','inactivity_timeout') DEFAULT NULL,
+  furthest_stage enum('start','campus','building','floor','exploring','feedback') NOT NULL DEFAULT 'start',
+  gave_feedback tinyint(1) NOT NULL DEFAULT 0,
+  feedback_id int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY platform_started (platform, started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE analytics_events (
+  id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  session_id char(36) NOT NULL,
+  event_type enum('stage_reached','room_searched','go_to','directions_requested','move','feedback_submitted','session_end') NOT NULL,
+  stage varchar(32) DEFAULT NULL,
+  node_id varchar(64) DEFAULT NULL,
+  from_node_id varchar(64) DEFAULT NULL,
+  to_node_id varchar(64) DEFAULT NULL,
+  room_query varchar(255) DEFAULT NULL,
+  matched tinyint(1) DEFAULT NULL,
+  move_kind enum('walk','jump') DEFAULT NULL,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (id),
+  KEY session_id (session_id),
+  KEY event_type_created (event_type, created_at),
+  KEY from_to (from_node_id, to_node_id),
+  CONSTRAINT analytics_events_ibfk_1 FOREIGN KEY (session_id) REFERENCES analytics_sessions (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+```bash
+mysql -u arise -p arise_web -e "CREATE TABLE analytics_sessions (id char(36) NOT NULL, platform enum('kiosk','desktop') NOT NULL, campus varchar(64) DEFAULT NULL, building varchar(64) DEFAULT NULL, started_at datetime NOT NULL DEFAULT current_timestamp(), ended_at datetime DEFAULT NULL, end_reason enum('feedback','idle_timeout','inactivity_timeout') DEFAULT NULL, furthest_stage enum('start','campus','building','floor','exploring','feedback') NOT NULL DEFAULT 'start', gave_feedback tinyint(1) NOT NULL DEFAULT 0, feedback_id int(10) unsigned DEFAULT NULL, PRIMARY KEY (id), KEY platform_started (platform, started_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+mysql -u arise -p arise_web -e "CREATE TABLE analytics_events (id bigint(20) unsigned NOT NULL AUTO_INCREMENT, session_id char(36) NOT NULL, event_type enum('stage_reached','room_searched','go_to','directions_requested','move','feedback_submitted','session_end') NOT NULL, stage varchar(32) DEFAULT NULL, node_id varchar(64) DEFAULT NULL, from_node_id varchar(64) DEFAULT NULL, to_node_id varchar(64) DEFAULT NULL, room_query varchar(255) DEFAULT NULL, matched tinyint(1) DEFAULT NULL, move_kind enum('walk','jump') DEFAULT NULL, created_at datetime NOT NULL DEFAULT current_timestamp(), PRIMARY KEY (id), KEY session_id (session_id), KEY event_type_created (event_type, created_at), KEY from_to (from_node_id, to_node_id), CONSTRAINT analytics_events_ibfk_1 FOREIGN KEY (session_id) REFERENCES analytics_sessions (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+```
+
+Purely additive: no existing table changes. Until it is applied, every
+`Analytics_API` call fails (unknown table) — `Feedback_API` and the rest of
+the API are unaffected. Apply it before shipping a front-end build that
+tracks analytics events.
 
 ---
 

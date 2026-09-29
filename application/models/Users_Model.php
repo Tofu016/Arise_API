@@ -51,6 +51,24 @@ class Users_Model extends CI_Model
         return (int) $this->db->count_all_results('users');
     }
 
+    // Admin-created account — unlike Auth_Model::register (always
+    // 'pending', self-service), this inserts with whatever role the
+    // admin chose directly, since the admin creating it is already the
+    // approval.
+    public function create($email, $passwordHash, $name, $role)
+    {
+        $now = date('Y-m-d H:i:s');
+        $this->db->insert('users', array(
+            'email' => $email,
+            'password_hash' => $passwordHash,
+            'name' => $name,
+            'role' => $role,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ));
+        return $this->find($this->db->insert_id());
+    }
+
     public function updateRole($id, $newRole)
     {
         $this->db->where('id', $id);

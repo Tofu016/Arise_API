@@ -17,6 +17,9 @@ class Cron_API extends CI_Controller
     // How long a sent email stays in email_queue before purgeExpired()
     // deletes it.
     const SENT_EMAIL_DAYS = 30;
+    // How long a desktop analytics session may go without a new tracked
+    // event before closeStaleSessions() considers it abandoned.
+    const STALE_SESSION_MINUTES = 30;
 
     public function __construct()
     {
@@ -31,6 +34,11 @@ class Cron_API extends CI_Controller
         if (!$this->input->is_cli_request()) {
             show_404();
         }
+
+        // Same timezone MY_Controller sets for HTTP requests. Without it the
+        // CLI falls back to php.ini's default, so closeStaleSessions' cutoff
+        // would be compared against Manila-time rows in a different zone.
+        date_default_timezone_set('Asia/Manila');
 
         $this->load->database();
         $this->load->model('Email_Model');
@@ -55,7 +63,7 @@ class Cron_API extends CI_Controller
         echo 'Processed: ' . count($result['sent']) . ' sent, ' . count($result['failed']) . " failed.\n";
     }
 
-    // Housekeeping: deletes what has outlived its use — expired login and
+    // Housekeeping: deletes what has outlived its use ï¿½ expired login and
     // password-reset tokens, and emails sent more than SENT_EMAIL_DAYS ago.
     // Nothing here changes what the API accepts (expired tokens are already
     // refused), so it is safe to run at any time and as often as wanted;
@@ -71,5 +79,18 @@ class Cron_API extends CI_Controller
             . $tokens['password_resets'] . ' reset tokens, '
             . $emails . " sent emails.
 ";
+    }
+
+    // Desktop analytics sessions have no explicit end event (see
+    // useAnalytics.js) â€” this closes any that have gone
+    // STALE_SESSION_MINUTES without a new tracked event, so
+    // avgDurationSeconds and the funnel don't wait on them forever. Same
+    // CLI-only guard as the rest of this controller; run it as often as
+    // processEmails/purgeExpired (see DEPLOY.md's cron setup).
+    public function closeStaleSessions()
+    {
+        $this->load->model('Analytics_Model');
+        $closed = $this->Analytics_Model->closeStaleSessions(self::STALE_SESSION_MINUTES);
+        echo "Closed: {$closed} stale desktop analytics sessions.\n";
     }
 }

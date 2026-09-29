@@ -17,8 +17,10 @@ defined('BASEPATH') or exit('No direct script access allowed');
 class Photo_preview
 {
     // The widths a client may ask for. 1024 is the default, for clients
-    // that don't ask (older app versions, the AR screens).
-    const WIDTHS = array(1024, 2048, 4096);
+    // that don't ask (older app versions, the AR screens). 320 is for the
+    // admin node flowchart's thumbnails, which only ever render at a few
+    // hundred CSS pixels wide — no reason to hand those a phone-sized copy.
+    const WIDTHS = array(320, 1024, 2048, 4096);
     const DEFAULT_MAX_WIDTH = 1024;
     const QUALITY = 85;
 

@@ -27,9 +27,28 @@ class Feedback_Model extends CI_Model
     }
 
     // Most recent first — an admin reviewing feedback wants to see
-    // what's new, not scroll to the bottom of a long list.
-    public function getAll()
+    // what's new, not scroll to the bottom of a long list. $filters is
+    // optional (the Analytics dashboard's Comments section uses them;
+    // the plain admin list keeps calling this with none), all additive:
+    // from/to (date, inclusive), minRating, hasComment (bool).
+    public function getAll($filters = array())
     {
+        if (!empty($filters['from'])) {
+            $this->db->where('created_at >=', $filters['from'] . ' 00:00:00');
+        }
+        if (!empty($filters['to'])) {
+            $this->db->where('created_at <=', $filters['to'] . ' 23:59:59');
+        }
+        if (!empty($filters['minRating'])) {
+            $this->db->where('rating >=', (int) $filters['minRating']);
+        }
+        if (isset($filters['hasComment']) && $filters['hasComment'] !== '') {
+            if ($filters['hasComment']) {
+                $this->db->where('comment IS NOT NULL', null, false)->where("comment !=", '');
+            } else {
+                $this->db->group_start()->where('comment', null)->or_where('comment', '')->group_end();
+            }
+        }
         return $this->db->order_by('created_at', 'DESC')->get($this->table)->result_array();
     }
 

@@ -1,14 +1,3 @@
--- ARISE API — database schema (structure only, no data).
---
--- Regenerate after any schema change:
---   mysqldump -u root --no-data --skip-comments arise_web | sed -E 's/ AUTO_INCREMENT=[0-9]+//' > schema.sql
---
--- Build a fresh database from it:
---   mysql -u root -e "CREATE DATABASE arise_web CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
---   mysql -u root arise_web < schema.sql
---
--- A fresh database has NO accounts — see SEED.md for the first-admin step.
-
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -20,6 +9,46 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+DROP TABLE IF EXISTS `analytics_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `analytics_events` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `session_id` char(36) NOT NULL,
+  `event_type` enum('stage_reached','room_searched','go_to','directions_requested','move','feedback_submitted','session_end') NOT NULL,
+  `stage` varchar(32) DEFAULT NULL,
+  `node_id` varchar(64) DEFAULT NULL,
+  `from_node_id` varchar(64) DEFAULT NULL,
+  `to_node_id` varchar(64) DEFAULT NULL,
+  `room_query` varchar(255) DEFAULT NULL,
+  `matched` tinyint(1) DEFAULT NULL,
+  `move_kind` enum('walk','jump') DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `session_id` (`session_id`),
+  KEY `event_type_created` (`event_type`,`created_at`),
+  KEY `from_to` (`from_node_id`,`to_node_id`),
+  CONSTRAINT `analytics_events_ibfk_1` FOREIGN KEY (`session_id`) REFERENCES `analytics_sessions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `analytics_sessions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `analytics_sessions` (
+  `id` char(36) NOT NULL,
+  `platform` enum('kiosk','desktop') NOT NULL,
+  `campus` varchar(64) DEFAULT NULL,
+  `building` varchar(64) DEFAULT NULL,
+  `started_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `ended_at` datetime DEFAULT NULL,
+  `end_reason` enum('feedback','idle_timeout','inactivity_timeout') DEFAULT NULL,
+  `furthest_stage` enum('start','campus','building','floor','exploring','feedback') NOT NULL DEFAULT 'start',
+  `gave_feedback` tinyint(1) NOT NULL DEFAULT 0,
+  `feedback_id` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `platform_started` (`platform`,`started_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `app_feedback`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -212,21 +241,6 @@ CREATE TABLE `placard_search_terms` (
   KEY `placard_dialog_id` (`placard_dialog_id`),
   KEY `idx_search_term` (`term`),
   CONSTRAINT `placard_search_terms_ibfk_1` FOREIGN KEY (`placard_dialog_id`) REFERENCES `placard_dialogs` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `saved_rooms`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `saved_rooms` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` int(10) unsigned NOT NULL,
-  `placard_dialog_id` int(10) unsigned NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `user_room` (`user_id`,`placard_dialog_id`),
-  KEY `placard_dialog_id` (`placard_dialog_id`),
-  CONSTRAINT `saved_rooms_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `saved_rooms_ibfk_2` FOREIGN KEY (`placard_dialog_id`) REFERENCES `placard_dialogs` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tour_sections`;
