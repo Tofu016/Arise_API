@@ -243,6 +243,40 @@ CREATE TABLE `placard_search_terms` (
   CONSTRAINT `placard_search_terms_ibfk_1` FOREIGN KEY (`placard_dialog_id`) REFERENCES `placard_dialogs` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `signage_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `signage_settings` (
+  `id` tinyint(3) unsigned NOT NULL,
+  `rotation_order` enum('sequence','shuffle') NOT NULL DEFAULT 'sequence',
+  `transition` enum('fade','cut') NOT NULL DEFAULT 'fade',
+  `default_duration_seconds` decimal(4,1) NOT NULL DEFAULT 10.0,
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `signage_slides`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `signage_slides` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `media_path` varchar(500) NOT NULL,
+  `crop_x` decimal(7,6) NOT NULL DEFAULT 0.000000,
+  `crop_y` decimal(7,6) NOT NULL DEFAULT 0.000000,
+  `crop_w` decimal(7,6) NOT NULL DEFAULT 1.000000,
+  `crop_h` decimal(7,6) NOT NULL DEFAULT 1.000000,
+  `duration_seconds` decimal(4,1) NOT NULL DEFAULT 10.0,
+  `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `starts_at` datetime DEFAULT NULL,
+  `ends_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `active_order` (`is_active`,`sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tour_sections`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;

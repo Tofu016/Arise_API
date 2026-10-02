@@ -48,3 +48,5 @@ vendor/
 
 # PHPUnit
 .phpunit.result.cache
+
+SESSION.md

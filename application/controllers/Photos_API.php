@@ -9,28 +9,12 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // the gallery itself found still referenced anywhere.
 class Photos_API extends MY_Controller
 {
-    // Every path currently referenced anywhere in the database, exactly
-    // as stored (e.g. "panoramas/gd1/somefile.webp") — the definitive
-    // "in use" set every listed photo gets checked against. Read fresh
-    // on every call, deliberately: see delete().
-    private function getReferencedPaths()
-    {
-        if (!isset($this->photo_references)) {
-            $this->load->library('Photo_references', array(
-                'reader' => function ($table, array $columns) {
-                    return $this->db->select(implode(', ', $columns))->get($table)->result_array();
-                },
-            ));
-        }
-        return $this->photo_references->referencedPaths();
-    }
-
     // GET /Photos_API/getAll — admin only.
     public function getAll()
     {
         $this->requireAdmin();
 
-        $referenced = $this->getReferencedPaths();
+        $referenced = $this->referencedPhotoPaths();
         $photos = $this->photoStore()->listPhotos();
 
         foreach ($photos as $i => $photo) {
@@ -60,7 +44,7 @@ class Photos_API extends MY_Controller
         $data = $this->getInput();
         $relativePath = isset($data['path']) ? $data['path'] : '';
 
-        $referenced = $this->getReferencedPaths();
+        $referenced = $this->referencedPhotoPaths();
         if (isset($referenced[$relativePath])) {
             return Api_response::fail(409, 'This photo is currently in use and cannot be deleted.');
         }

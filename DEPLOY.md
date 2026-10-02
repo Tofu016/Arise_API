@@ -553,6 +553,65 @@ Purely additive: no existing table changes. Until it is applied, every
 the API are unaffected. Apply it before shipping a front-end build that
 tracks analytics events.
 
+**Signage (kiosk advertisements)** adds `signage_slides` and
+`signage_settings` behind `Signage_API`: the images, GIFs and looping
+videos shown in the kiosk's bottom band, each with its crop, duration,
+rotation position and optional run window, plus one settings row (rotation
+order, transition, default duration). Media files go to
+`UPLOAD_ROOT/signage/`, served directly like `tourpanorama/`. Named
+"signage" rather than "ads" on purpose: ad blockers hide URLs and elements
+that look like advertisements. `signage_settings` needs no seed row; the
+API falls back to its defaults until the first save.
+
+```sql
+CREATE TABLE signage_slides (
+  id int(10) unsigned NOT NULL AUTO_INCREMENT,
+  title varchar(255) NOT NULL,
+  media_path varchar(500) NOT NULL,
+  crop_x decimal(7,6) NOT NULL DEFAULT 0.000000,
+  crop_y decimal(7,6) NOT NULL DEFAULT 0.000000,
+  crop_w decimal(7,6) NOT NULL DEFAULT 1.000000,
+  crop_h decimal(7,6) NOT NULL DEFAULT 1.000000,
+  duration_seconds decimal(4,1) NOT NULL DEFAULT 10.0,
+  sort_order int(10) unsigned NOT NULL DEFAULT 0,
+  is_active tinyint(1) NOT NULL DEFAULT 1,
+  starts_at datetime DEFAULT NULL,
+  ends_at datetime DEFAULT NULL,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  updated_at datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (id),
+  KEY active_order (is_active, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE signage_settings (
+  id tinyint(3) unsigned NOT NULL,
+  rotation_order enum('sequence','shuffle') NOT NULL DEFAULT 'sequence',
+  transition enum('fade','cut') NOT NULL DEFAULT 'fade',
+  default_duration_seconds decimal(4,1) NOT NULL DEFAULT 10.0,
+  updated_at datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+```bash
+mysql -u arise -p arise_web -e "CREATE TABLE signage_slides (id int(10) unsigned NOT NULL AUTO_INCREMENT, title varchar(255) NOT NULL, media_path varchar(500) NOT NULL, crop_x decimal(7,6) NOT NULL DEFAULT 0.000000, crop_y decimal(7,6) NOT NULL DEFAULT 0.000000, crop_w decimal(7,6) NOT NULL DEFAULT 1.000000, crop_h decimal(7,6) NOT NULL DEFAULT 1.000000, duration_seconds decimal(4,1) NOT NULL DEFAULT 10.0, sort_order int(10) unsigned NOT NULL DEFAULT 0, is_active tinyint(1) NOT NULL DEFAULT 1, starts_at datetime DEFAULT NULL, ends_at datetime DEFAULT NULL, created_at datetime NOT NULL DEFAULT current_timestamp(), updated_at datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(), PRIMARY KEY (id), KEY active_order (is_active, sort_order)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+mysql -u arise -p arise_web -e "CREATE TABLE signage_settings (id tinyint(3) unsigned NOT NULL, rotation_order enum('sequence','shuffle') NOT NULL DEFAULT 'sequence', transition enum('fade','cut') NOT NULL DEFAULT 'fade', default_duration_seconds decimal(4,1) NOT NULL DEFAULT 10.0, updated_at datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(), PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+```
+
+Purely additive: no existing table changes. Until it is applied,
+`Signage_API` calls fail (unknown table), the kiosk simply shows its plain
+bottom band, and the rest of the API is unaffected. Videos count against
+`upload_max_filesize`/`post_max_size` like any upload (the A-section values
+above allow 64 MB); a 1080 x 336 loop of 15-30 seconds is normally a few MB.
+
+Times on screen are in tenths of a second (`decimal(4,1)`, e.g. 7.5). A
+database that got an earlier draft of these tables, with whole-second
+`smallint` columns, converts in place (existing values keep their number):
+
+```bash
+mysql -u arise -p arise_web -e "ALTER TABLE signage_slides MODIFY duration_seconds decimal(4,1) NOT NULL DEFAULT 10.0; ALTER TABLE signage_settings MODIFY default_duration_seconds decimal(4,1) NOT NULL DEFAULT 10.0"
+```
+
 ---
 
 ## Part C — Rollback

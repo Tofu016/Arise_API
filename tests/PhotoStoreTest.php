@@ -104,6 +104,66 @@ class PhotoStoreTest extends TestCase
         $this->assertSame('tourcover/anim.gif', $r['path']);
     }
 
+    // ---- save: signage video --------------------------------------
+
+    // The first bytes of a real MP4 (an "ftyp" box) and WebM (an EBML
+    // header whose DocType is "webm"); the store only reads the head.
+    private function mp4($clientName = 'clip.mp4')
+    {
+        return $this->upload("\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2avc1mp41" . str_repeat("\x00", 32), $clientName);
+    }
+
+    private function webm($docType = 'webm', $clientName = 'clip.webm')
+    {
+        return $this->upload("\x1A\x45\xDF\xA3\x9F\x42\x86\x81\x01\x42\x82\x84" . $docType . str_repeat("\x00", 32), $clientName);
+    }
+
+    public function testSignageAcceptsMp4AndWebmUnderThePublicRoot()
+    {
+        $r = $this->store->save('signage', $this->mp4(), 'enroll');
+        $this->assertSame('signage/enroll.mp4', $r['path']);
+        $this->assertFileExists($this->base . '/public/signage/enroll.mp4');
+
+        $r = $this->store->save('signage', $this->webm(), 'loop');
+        $this->assertSame('signage/loop.webm', $r['path']);
+    }
+
+    public function testSignageStillAcceptsImagesWithTheirVerifiedExtension()
+    {
+        $gif = $this->upload(base64_decode(self::GIF), 'anim.mp4');
+
+        $this->assertSame('signage/anim.gif', $this->store->save('signage', $gif, 'anim')['path']);
+    }
+
+    public function testAVideoExtensionComesFromTheContainerNotTheClientName()
+    {
+        $this->assertSame('signage/clip.mp4', $this->store->save('signage', $this->mp4('clip.webm'), 'clip.php')['path']);
+    }
+
+    public function testSignageRefusesMatroskaAndNonMedia()
+    {
+        foreach (array($this->webm('matroska'), $this->upload('<?php echo 1; ?>' . str_repeat(' ', 32))) as $incoming) {
+            $r = $this->store->save('signage', $incoming, 'x');
+            $this->assertSame(400, $r['status']);
+            $this->assertStringContainsString('or video (MP4, WebM)', $r['error']);
+        }
+    }
+
+    public function testOnlySignageAcceptsVideo()
+    {
+        $r = $this->store->save('tourcover', $this->mp4(), 'clip');
+
+        $this->assertSame(400, $r['status']);
+        $this->assertStringNotContainsString('video', $r['error']);
+    }
+
+    public function testResolveReportsAVideosContentType()
+    {
+        $this->store->save('signage', $this->mp4(), 'clip');
+
+        $this->assertSame('video/mp4', $this->store->resolve('signage/clip.mp4')['content_type']);
+    }
+
     public function testRejectsAFileThatIsNotAnImage()
     {
         $r = $this->store->save('tourcover', $this->upload('<?php echo 1;', 'photo.jpg'), 'photo');

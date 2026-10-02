@@ -23,6 +23,10 @@ class Photo_store
     //                is a temporary holding area whose files are
     //                unreferenced by design until published, so listing
     //                them would offer a mid-review file for deletion.
+    //   video      : also accepts MP4/WebM video (optional, default
+    //                false). Only signage (the kiosk's bottom-band media,
+    //                see Signage_API) needs it; the store still calls every
+    //                file it holds a Photo.
     const CATEGORIES = array(
         'tourpanorama' => array('visibility' => 'public', 'layout' => 'flat', 'listed' => true),
         'tourcover' => array('visibility' => 'public', 'layout' => 'flat', 'listed' => true),
@@ -31,6 +35,7 @@ class Photo_store
         'roomphoto' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => true),
         'room360' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => true),
         'panoramas-review' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => false),
+        'signage' => array('visibility' => 'public', 'layout' => 'flat', 'listed' => true, 'video' => true),
     );
 
     // The only image types accepted, and the extension each is saved as.
@@ -47,6 +52,8 @@ class Photo_store
         'png' => 'image/png',
         'webp' => 'image/webp',
         'gif' => 'image/gif',
+        'mp4' => 'video/mp4',
+        'webm' => 'video/webm',
     );
 
     private $publicRoot;
@@ -115,8 +122,14 @@ class Photo_store
         $file = $incoming['file'];
 
         $ext = $this->verifiedExtension($file['tmp_name']);
+        $acceptsVideo = !empty($def['video']);
+        if ($ext === false && $acceptsVideo) {
+            $ext = self::videoExtension($file['tmp_name']);
+        }
         if ($ext === false) {
-            return $this->fail(400, 'The uploaded file is not a valid, recognized image.');
+            return $this->fail(400, $acceptsVideo
+                ? 'The uploaded file is not a valid, recognized image (JPG, PNG, GIF, WebP) or video (MP4, WebM).'
+                : 'The uploaded file is not a valid, recognized image.');
         }
 
         $dir = $this->rootFor($def) . $category . '/';
@@ -321,6 +334,29 @@ class Photo_store
             return false;
         }
         return isset(self::MIME_TO_EXT[$info['mime']]) ? self::MIME_TO_EXT[$info['mime']] : false;
+    }
+
+    // The video counterpart of verifiedExtension(): reads the container's
+    // own leading bytes rather than trusting the name or the browser's
+    // Content-Type. An MP4 (ISO base media) file opens with a box whose
+    // type, at bytes 4-7, is "ftyp"; a WebM file is an EBML document
+    // (magic 1A 45 DF A3) whose DocType, a few bytes in, is "webm" (a
+    // Matroska .mkv has DocType "matroska" and is refused, since browsers
+    // don't reliably play it). Like an image, the saved extension comes
+    // from this check alone.
+    public static function videoExtension($tmpPath)
+    {
+        $head = @file_get_contents($tmpPath, false, null, 0, 64);
+        if (!is_string($head) || strlen($head) < 12) {
+            return false;
+        }
+        if (substr($head, 4, 4) === 'ftyp') {
+            return 'mp4';
+        }
+        if (bin2hex(substr($head, 0, 4)) === '1a45dfa3' && strpos($head, 'webm') !== false) {
+            return 'webm';
+        }
+        return false;
     }
 
     // Confirms a usable uploaded file arrived, with a SPECIFIC reason

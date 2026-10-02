@@ -9,11 +9,12 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // lives here, in one place, and nowhere else.
 //
 // SOURCES lists every Photo column. The convention is that a column
-// holding a Photo path has "photo" in its name; a test parses schema.sql
-// and fails if a column named that way is not declared here (or if this
-// declares one the schema no longer has), so a new photo column cannot
-// be forgotten silently. A photo column named without "photo" would slip
-// past that test — don't.
+// holding a Photo path has "photo" in its name, or "media" where it may
+// also hold a video (signage); a test parses schema.sql and fails if a
+// column named that way is not declared here (or if this declares one the
+// schema no longer has), so a new photo column cannot be forgotten
+// silently. A photo column named without either word would slip past
+// that test, so don't.
 //
 // Free of CodeIgniter dependencies, like Photo_store: the database is
 // reached through an injected reader.
@@ -26,6 +27,7 @@ class Photo_references
         'placard_dialogs' => array('photo_path', 'photo_360_path'),
         'tour_sections' => array('cover_photo_path'),
         'tour_stop_marker_photos' => array('photo_path'),
+        'signage_slides' => array('media_path'),
     );
 
     private $reader;

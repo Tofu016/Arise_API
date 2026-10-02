@@ -220,6 +220,23 @@ class MY_Controller extends CI_Controller
         return rtrim($root, '/\\') . '/';
     }
 
+    // Every Photo path currently referenced anywhere in the database,
+    // exactly as stored (e.g. "panoramas/gd1/somefile.webp"), as a set:
+    // the definitive "in use" check (see Photo_references). Read fresh on
+    // every call, deliberately: Photos_API::delete and Signage_API's media
+    // cleanup must not trust a list read before another admin's change.
+    protected function referencedPhotoPaths()
+    {
+        if (!isset($this->photo_references)) {
+            $this->load->library('Photo_references', array(
+                'reader' => function ($table, array $columns) {
+                    return $this->db->select(implode(', ', $columns))->get($table)->result_array();
+                },
+            ));
+        }
+        return $this->photo_references->referencedPaths();
+    }
+
     // Stops the action with a 400 unless $path is empty (no photo) or a
     // Photo path in $category — i.e. something save() actually produced,
     // not a guessed file name. $field names the body field in the message.

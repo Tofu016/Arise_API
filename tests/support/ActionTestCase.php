@@ -75,6 +75,20 @@ class SavedRoomsApiHarness extends SavedRooms_API
     public $modelNames = array('SavedRooms_Model', 'PlacardDialogs_Model');
 }
 
+// Records the media it would have discarded instead of touching the photo
+// store and the database's references.
+class SignageApiHarness extends Signage_API
+{
+    use ControllerHarness;
+    public $modelNames = array('Signage_Model');
+    public $discarded = array();
+
+    protected function discardMediaIfUnused($path)
+    {
+        $this->discarded[] = $path;
+    }
+}
+
 class AuthApiHarness extends Auth_API
 {
     use ControllerHarness;

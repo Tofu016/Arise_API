@@ -16,6 +16,7 @@ require_once APPPATH . 'libraries/Auth_session.php';
 require_once APPPATH . 'libraries/Neighbor_links.php';
 require_once APPPATH . 'libraries/Account_mail.php';
 require_once APPPATH . 'libraries/Smtp_mailer.php';
+require_once APPPATH . 'libraries/Signage_rules.php';
 
 // MY_Controller extends CI_Controller and calls show_404(). Stubbed so its
 // own guard and dispatch code can be tested without booting the framework;
@@ -49,7 +50,7 @@ function log_message($level, $message)
 require_once APPPATH . 'core/MY_Controller.php';
 
 // Controllers whose actions are tested directly (see ActionTestCase).
-foreach (array('Auth', 'Nodes', 'Elevators', 'TourStops', 'Buildings', 'Users', 'TourSections', 'PlacardDialogs', 'SavedRooms') as $controller) {
+foreach (array('Auth', 'Nodes', 'Elevators', 'TourStops', 'Buildings', 'Users', 'TourSections', 'PlacardDialogs', 'SavedRooms', 'Signage') as $controller) {
     require_once APPPATH . "controllers/{$controller}_API.php";
 }
 // Models extend CI_Model; stubbed so their methods can be called with a

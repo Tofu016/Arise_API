@@ -34,6 +34,7 @@ class PhotoReferencesTest extends TestCase
             'tour_sections' => array(array('cover_photo_path' => 'tourcover/c.jpg')),
             'tour_stop_marker_photos' => array(array('photo_path' => 'tourmarker/d.jpg')),
             'placard_dialogs' => array(array('photo_path' => 'roomphoto/gd1/e.jpg', 'photo_360_path' => 'room360/gd1/f.webp')),
+            'signage_slides' => array(array('media_path' => 'signage/g.mp4')),
         );
 
         $paths = array_keys($this->store()->referencedPaths());
@@ -43,6 +44,7 @@ class PhotoReferencesTest extends TestCase
             'panoramas/gd1/a.jpg',
             'room360/gd1/f.webp',
             'roomphoto/gd1/e.jpg',
+            'signage/g.mp4',
             'tourcover/c.jpg',
             'tourmarker/d.jpg',
             'tourpanorama/b.jpg',
@@ -130,7 +132,7 @@ class PhotoReferencesTest extends TestCase
         foreach ($this->schemaColumns() as $table => $columns) {
             foreach ($columns as $column) {
                 $declared = isset(Photo_references::SOURCES[$table]) && in_array($column, Photo_references::SOURCES[$table], true);
-                if (stripos($column, 'photo') !== false && !$declared) {
+                if (preg_match('/photo|media/i', $column) && !$declared) {
                     $undeclared[] = "{$table}.{$column}";
                 }
             }
