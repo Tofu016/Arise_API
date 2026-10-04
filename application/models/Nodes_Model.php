@@ -24,9 +24,9 @@ class Nodes_Model extends CI_Model
 
     // GD1/GD2/GD3 are separate buildings but one physical campus (see
     // buildingStore.js's own HARDCODED_IDS on the frontend for the same
-    // distinction) — a campus entrance flagged on any of the three clears
-    // it on the other two as well. Any other building is its own,
-    // single-building campus.
+    // distinction). They are built in, so they count as one campus even with
+    // no buildings row saying so; every other grouping comes from
+    // buildings.campus_id (see campusBuildingIds).
     private $mainCampusBuildingIds = array('gd1', 'gd2', 'gd3');
 
     public function __construct()
@@ -232,15 +232,29 @@ class Nodes_Model extends CI_Model
         return $this->find($newId);
     }
 
-    // Every building id in the same campus as $buildingId — the GD1/GD2/GD3
-    // cluster if it's one of those three, otherwise just itself (a
-    // single-building campus, e.g. Digital Campus).
+    // Every building id in the same campus as $buildingId: the built-in
+    // GD1/GD2/GD3 cluster, plus any buildings an admin grouped through
+    // buildings.campus_id. A building with no campus_id is its own campus,
+    // and a campus is named by the id of the building others join (the same
+    // COALESCE(campus_id, id) rule as Buildings_Model).
     private function campusBuildingIds($buildingId)
     {
+        $ids = array($buildingId);
         if (in_array($buildingId, $this->mainCampusBuildingIds, true)) {
-            return $this->mainCampusBuildingIds;
+            $ids = $this->mainCampusBuildingIds;
         }
-        return array($buildingId);
+
+        $this->db->where('id', $buildingId);
+        $row = $this->db->get('buildings')->row_array();
+        $campusId = ($row && !empty($row['campus_id'])) ? $row['campus_id'] : $buildingId;
+        $ids[] = $campusId;
+
+        $this->db->where('campus_id', $campusId);
+        $members = $this->db->get('buildings')->result_array();
+        foreach ($members as $member) {
+            $ids[] = $member['id'];
+        }
+        return array_values(array_unique($ids));
     }
 
     public function update($id, $data)
@@ -263,7 +277,7 @@ class Nodes_Model extends CI_Model
         }
 
         // One campus entrance per campus: flagging this one clears the flag
-        // on every other node in the same campus (GD1/GD2/GD3 count as one).
+        // on every other node in the same campus (see campusBuildingIds).
         if ($node && !empty($data['is_campus_entrance'])) {
             $this->db->where_in('building', $this->campusBuildingIds($node['building']));
             $this->db->where('id !=', $id);

@@ -1,6 +1,8 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
+require_once APPPATH . 'libraries/Kiosk_rules.php';
+
 // Behavioral analytics for the Analytics dashboard (formerly the plain
 // Feedback admin page — comments/ratings still live in Feedback_API,
 // this controller only owns session/event tracking). track() is public,
@@ -24,32 +26,57 @@ class Analytics_API extends MY_Controller
     {
         parent::__construct();
         $this->load->model('Analytics_Model');
+        $this->load->model('Kiosks_Model');
     }
 
     // POST /Analytics_API/track — public, no auth (same reasoning as
     // Feedback_API::submit: a kiosk visitor has no account). Body:
-    //   { session_id, platform: "kiosk"|"desktop", campus?, building?,
+    //   { session_id, kiosk_token?, has_gate?, campus?, building?,
     //     events: [{ type, stage?, node_id?, from_node_id?, to_node_id?,
     //                room_query?, matched?, move_kind?, feedback_id?,
     //                reason? }, ...] }
+    // The platform is decided here, never claimed by the client: a session
+    // is "kiosk" only when kiosk_token is a paired kiosk's own token (see
+    // Kiosks_API), and "web" otherwise, including a browser that merely
+    // shows the kiosk layout. has_gate says the visitor view has the
+    // start/campus/building/floor screens (the Compact layout), so the
+    // session starts at the 'start' stage instead of already exploring.
     // Silently drops any event whose shape doesn't match instead of
     // failing the whole batch — one malformed event from a stale client
     // build shouldn't lose every other event in the same batch.
+    //
+    // Rate-limited per IP (wide, since a campus shares addresses) and per
+    // session (tight, since a real session flushes a few times a minute).
+    // The IP check runs first so a flood is refused before any parsing.
     public function track()
     {
+        $ip = Rate_limit::subject($this->clientIp());
+        $message = 'Too many requests. Try again in %d seconds.';
+        $this->enforceRateLimit('track_ip', $ip, Rate_limit::TRACK_IP_MAX, Rate_limit::TRACK_WINDOW, $message);
+
         $data = $this->getInput();
 
         $sessionId = isset($data['session_id']) ? trim((string) $data['session_id']) : '';
-        $platform = isset($data['platform']) ? $data['platform'] : '';
         // Client ids come from crypto.randomUUID(); the column is char(36).
         $isUuid = preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $sessionId) === 1;
-        if (!$isUuid || !in_array($platform, array('kiosk', 'desktop'), true)) {
-            return Api_response::fail(400, 'A UUID session_id and a valid platform are required.');
+        if (!$isUuid) {
+            $this->recordRateHit('track_ip', $ip);
+            return Api_response::fail(400, 'A UUID session_id is required.');
         }
+
+        $session = Rate_limit::subject(strtolower($sessionId));
+        $this->enforceRateLimit('track_session', $session, Rate_limit::TRACK_SESSION_MAX, Rate_limit::TRACK_WINDOW, $message);
+        $this->recordRateHit('track_ip', $ip);
+        $this->recordRateHit('track_session', $session);
+
+        $kioskToken = isset($data['kiosk_token']) && is_string($data['kiosk_token']) ? $data['kiosk_token'] : '';
+        $paired = $kioskToken !== '' && $this->Kiosks_Model->findByToken(Kiosk_rules::hash($kioskToken)) !== null;
+        $platform = $paired ? 'kiosk' : 'web';
+        $hasGate = !empty($data['has_gate']);
 
         $campus = $this->shortString($data, 'campus');
         $building = $this->shortString($data, 'building');
-        $this->Analytics_Model->ensureSession($sessionId, $platform, $campus, $building);
+        $this->Analytics_Model->ensureSession($sessionId, $platform, $campus, $building, $hasGate);
 
         $rawEvents = isset($data['events']) && is_array($data['events'])
             ? array_slice($data['events'], 0, self::MAX_EVENTS_PER_BATCH)

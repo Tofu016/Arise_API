@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-// How a request's Authorization header identifies a user. The header is
+// How a request's Authorization header identifies an admin. The header is
 // read in exactly one place, so the guards and logout can't disagree about
 // what counts as a bearer token.
 //
@@ -22,11 +22,11 @@ class Auth_session
         return trim(substr($header, 7));
     }
 
-    // The user row the header identifies, or null for an anonymous request
+    // The admin row the header identifies, or null for an anonymous request
     // (no bearer token, or one the lookup does not accept). $validateToken
-    // is callable($token): the user row for a valid token, anything falsy
+    // is callable($token): the admin row for a valid token, anything falsy
     // otherwise.
-    public static function userFor($header, $validateToken)
+    public static function adminFor($header, $validateToken)
     {
         $token = self::tokenFrom($header);
         if ($token === null) {

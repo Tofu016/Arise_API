@@ -3,7 +3,7 @@ use PHPUnit\Framework\TestCase;
 
 // A controller for exercising MY_Controller's real guard and dispatch
 // code: its constructor is skipped (it needs CodeIgniter) and the current
-// user is supplied directly.
+// admin is supplied directly.
 class ApiTestController extends MY_Controller
 {
     public $user = null;
@@ -12,7 +12,7 @@ class ApiTestController extends MY_Controller
     {
     }
 
-    protected function getCurrentUser()
+    protected function getCurrentAdmin()
     {
         return $this->user;
     }
@@ -193,21 +193,10 @@ class ApiResponseTest extends TestCase
         $this->assertSame('Not signed in.', $r->body()['error']);
     }
 
-    public function testAdminOnlyRefusesANonAdminWith403()
+    public function testAdminOnlyLetsASignedInAdminThrough()
     {
         $c = new ApiTestController();
-        $c->user = array('role' => 'user');
-
-        $r = $this->replyOf($c, 'adminOnly');
-
-        $this->assertSame(403, $r->status());
-        $this->assertSame('Admin access required.', $r->body()['error']);
-    }
-
-    public function testAdminOnlyLetsAnAdminThrough()
-    {
-        $c = new ApiTestController();
-        $c->user = array('role' => 'admin');
+        $c->user = array('id' => 1);
 
         $r = $this->replyOf($c, 'adminOnly');
 

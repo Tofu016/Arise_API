@@ -36,7 +36,7 @@ DROP TABLE IF EXISTS `analytics_sessions`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `analytics_sessions` (
   `id` char(36) NOT NULL,
-  `platform` enum('kiosk','desktop') NOT NULL,
+  `platform` enum('kiosk','web') NOT NULL,
   `campus` varchar(64) DEFAULT NULL,
   `building` varchar(64) DEFAULT NULL,
   `started_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -68,14 +68,14 @@ DROP TABLE IF EXISTS `auth_tokens`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `auth_tokens` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` int(10) unsigned NOT NULL,
+  `admin_id` int(10) unsigned NOT NULL,
   `token_hash` varchar(255) NOT NULL,
   `expires_at` datetime NOT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  KEY `user_id` (`user_id`),
+  KEY `admin_id` (`admin_id`),
   KEY `idx_auth_tokens_hash` (`token_hash`),
-  CONSTRAINT `auth_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+  CONSTRAINT `auth_tokens_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `admins` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `buildings`;
@@ -108,22 +108,41 @@ CREATE TABLE `elevators` (
   CONSTRAINT `elevators_ibfk_1` FOREIGN KEY (`building`) REFERENCES `buildings` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `email_queue`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `email_queue` (
+DROP TABLE IF EXISTS `kiosks`;
+CREATE TABLE `kiosks` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `to_email` varchar(255) NOT NULL,
-  `subject` varchar(255) NOT NULL,
-  `body_html` text NOT NULL,
-  `attempts` int(10) unsigned NOT NULL DEFAULT 0,
-  `last_error` varchar(500) DEFAULT NULL,
-  `sent_at` datetime DEFAULT NULL,
+  `name` varchar(120) NOT NULL,
+  `node_id` varchar(64) DEFAULT NULL,
+  `pairing_code_hash` char(64) DEFAULT NULL,
+  `pairing_expires_at` datetime DEFAULT NULL,
+  `token_hash` char(64) DEFAULT NULL,
+  `paired_at` datetime DEFAULT NULL,
+  `last_seen_at` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  KEY `idx_email_queue_pending` (`sent_at`)
+  KEY `idx_kiosks_code` (`pairing_code_hash`),
+  KEY `idx_kiosks_token` (`token_hash`),
+  KEY `node_id` (`node_id`),
+  CONSTRAINT `kiosks_ibfk_1` FOREIGN KEY (`node_id`) REFERENCES `nodes` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `kiosk_pair_failures`;
+CREATE TABLE `kiosk_pair_failures` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `ip` varchar(45) NOT NULL,
+  `attempted_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_pair_failures_ip` (`ip`,`attempted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+DROP TABLE IF EXISTS `rate_limit_hits`;
+CREATE TABLE `rate_limit_hits` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `bucket` varchar(32) NOT NULL,
+  `subject` char(64) NOT NULL,
+  `hit_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_rate_limit_lookup` (`bucket`,`subject`,`hit_at`),
+  KEY `idx_rate_limit_hit_at` (`hit_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 DROP TABLE IF EXISTS `node_markers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -197,21 +216,6 @@ CREATE TABLE `nodes` (
   CONSTRAINT `nodes_ibfk_1` FOREIGN KEY (`building`) REFERENCES `buildings` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `password_resets`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `password_resets` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` int(10) unsigned NOT NULL,
-  `token_hash` varchar(255) NOT NULL,
-  `expires_at` datetime NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `user_id` (`user_id`),
-  KEY `idx_password_resets_token` (`token_hash`),
-  CONSTRAINT `password_resets_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `placard_dialogs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -242,21 +246,6 @@ CREATE TABLE `placard_search_terms` (
   KEY `placard_dialog_id` (`placard_dialog_id`),
   KEY `idx_search_term` (`term`),
   CONSTRAINT `placard_search_terms_ibfk_1` FOREIGN KEY (`placard_dialog_id`) REFERENCES `placard_dialogs` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `saved_rooms`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `saved_rooms` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` int(10) unsigned NOT NULL,
-  `placard_dialog_id` int(10) unsigned NOT NULL,
-  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `user_room` (`user_id`,`placard_dialog_id`),
-  KEY `placard_dialog_id` (`placard_dialog_id`),
-  CONSTRAINT `saved_rooms_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `saved_rooms_ibfk_2` FOREIGN KEY (`placard_dialog_id`) REFERENCES `placard_dialogs` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `signage_settings`;
@@ -367,21 +356,32 @@ CREATE TABLE `tour_stops` (
   CONSTRAINT `tour_stops_ibfk_1` FOREIGN KEY (`section_id`) REFERENCES `tour_sections` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `users`;
+DROP TABLE IF EXISTS `admins`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `users` (
+CREATE TABLE `admins` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `email` varchar(255) NOT NULL,
   `password_hash` varchar(255) NOT NULL,
   `name` varchar(255) NOT NULL,
-  `role` enum('pending','user','admin') NOT NULL DEFAULT 'pending',
+  `status` enum('pending','approved') NOT NULL DEFAULT 'approved',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `password_resets`;
+CREATE TABLE `password_resets` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `admin_id` int(10) unsigned NOT NULL,
+  `token_hash` char(64) NOT NULL,
+  `expires_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `token_hash` (`token_hash`),
+  KEY `admin_id` (`admin_id`),
+  CONSTRAINT `password_resets_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `admins` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

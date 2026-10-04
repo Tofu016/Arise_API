@@ -1,14 +1,12 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-// Handles credential verification and the bearer-token lifecycle.
-// Deliberately isolated in its own Model, separate from any future
-// registration/password-reset logic — if the client's own auth system
-// ends up needing to plug in here instead of our own users table check,
-// this is the one, contained place that changes.
+// Handles credential verification, the bearer-token lifecycle and password
+// reset tokens for admin accounts (the only accounts that exist). Account management
+// (listing, creating, deleting) lives in Admins_Model.
 class Auth_Model extends CI_Model
 {
-    // 8 hours — reasonable for an admin tool, not a high-security
+    // 8 hours: reasonable for an admin tool, not a high-security
     // banking session. Easy to tune later without touching anything
     // else about how tokens work.
     const TOKEN_LIFETIME_HOURS = 8;
@@ -19,41 +17,39 @@ class Auth_Model extends CI_Model
         $this->load->database();
     }
 
-    // Returns the user row (including role) on success, or false if the
-    // email doesn't exist or the password doesn't match. password_verify()
-    // is the correct counterpart to PHP's own password_hash() — never
-    // compare hashes directly with ==, since password_hash() salts each
-    // hash differently even for the same password.
+    // Returns the admin row on success, or false if the email doesn't
+    // exist or the password doesn't match. password_verify() is the
+    // correct counterpart to PHP's own password_hash(); never compare
+    // hashes directly with ==, since password_hash() salts each hash
+    // differently even for the same password.
     public function verifyCredentials($email, $password)
     {
         $this->db->select('*');
-        $this->db->from('users');
+        $this->db->from('admins');
         $this->db->where('email', $email);
-        $query = $this->db->get();
-        $user = $query->row_array();
+        $admin = $this->db->get()->row_array();
 
-        if (!$user) {
+        if (!$admin) {
             return false;
         }
-        if (!password_verify($password, $user['password_hash'])) {
+        if (!password_verify($password, $admin['password_hash'])) {
             return false;
         }
-        return $user;
+        return $admin;
     }
 
     // Generates a real, cryptographically random token via random_bytes()
-    // (not uniqid() or similar — those are predictable, not suitable for
-    // anything security-sensitive). Only the hash is ever stored; the
-    // raw token is returned once, here, for the Controller to send back
-    // to the client — it's never persisted server-side in raw form.
-    public function createToken($userId)
+    // (not uniqid() or similar, which are predictable). Only the hash is
+    // ever stored; the raw token is returned once, here, for the
+    // Controller to send back to the client.
+    public function createToken($adminId)
     {
         $rawToken = bin2hex(random_bytes(32));
         $tokenHash = hash('sha256', $rawToken);
         $expiresAt = date('Y-m-d H:i:s', strtotime('+' . self::TOKEN_LIFETIME_HOURS . ' hours'));
 
         $this->db->insert('auth_tokens', array(
-            'user_id' => $userId,
+            'admin_id' => $adminId,
             'token_hash' => $tokenHash,
             'expires_at' => $expiresAt,
         ));
@@ -61,11 +57,9 @@ class Auth_Model extends CI_Model
         return $rawToken;
     }
 
-    // Returns the associated user row if the token is genuinely valid
+    // Returns the associated admin row if the token is genuinely valid
     // (exists AND not expired), or false otherwise. Hashes the given raw
-    // token the same way createToken() did, then looks up that hash —
-    // the raw token itself is never stored, so this is the only way to
-    // check it.
+    // token the same way createToken() did, then looks up that hash.
     public function validateToken($rawToken)
     {
         if (empty($rawToken)) {
@@ -73,21 +67,18 @@ class Auth_Model extends CI_Model
         }
         $tokenHash = hash('sha256', $rawToken);
 
-        $this->db->select('users.*');
+        $this->db->select('admins.*');
         $this->db->from('auth_tokens');
-        $this->db->join('users', 'users.id = auth_tokens.user_id');
+        $this->db->join('admins', 'admins.id = auth_tokens.admin_id');
         $this->db->where('auth_tokens.token_hash', $tokenHash);
+        $this->db->where('admins.status', 'approved');
         $this->db->where('auth_tokens.expires_at >', date('Y-m-d H:i:s'));
-        $query = $this->db->get();
 
-        return $query->row_array();
+        return $this->db->get()->row_array();
     }
 
-    // Logout — deletes the specific token's row outright, rather than
-    // waiting for it to expire naturally. This is the actual point of
-    // using our own token table instead of a signed JWT: a JWT can't be
-    // un-issued early without extra infrastructure (a blocklist); this
-    // is just a single DELETE.
+    // Logout: deletes the specific token's row outright, rather than
+    // waiting for it to expire naturally.
     public function deleteToken($rawToken)
     {
         $tokenHash = hash('sha256', $rawToken);
@@ -95,146 +86,67 @@ class Auth_Model extends CI_Model
         return $this->db->delete('auth_tokens');
     }
 
-    // ---------- Registration ----------
-
-    public function emailExists($email)
+    // Ends every login session of one admin, e.g. after their password is
+    // reset by someone else: a session opened with the old password
+    // shouldn't survive the change.
+    public function deleteAllTokensForAdmin($adminId)
     {
-        $this->db->select('id');
-        $this->db->from('users');
-        $this->db->where('email', $email);
-        $query = $this->db->get();
-        return $query->num_rows() > 0;
+        $this->db->where('admin_id', $adminId);
+        return $this->db->delete('auth_tokens');
     }
 
-    // Used by the forgot-password flow — looking someone up by email
-    // alone, with no password involved, is a genuinely different
-    // operation from verifyCredentials() above, so it gets its own
-    // method rather than overloading that one with an optional
-    // password check.
-    public function findByEmail($email)
+    // 1 hour, single use. Only the hash is stored, like a login token: the
+    // raw value exists once, in the email.
+    const RESET_LIFETIME_MINUTES = 60;
+
+    // Replaces any earlier reset link of that admin, so only the newest
+    // one works. Returns the raw token for the email.
+    public function createPasswordResetToken($adminId)
     {
-        $this->db->select('*');
-        $this->db->from('users');
-        $this->db->where('email', $email);
-        $query = $this->db->get();
-        return $query->row_array();
-    }
+        $this->db->where('admin_id', $adminId);
+        $this->db->delete('password_resets');
 
-    // New accounts start as 'pending' — matches the original Firebase
-    // behavior exactly: Register.jsx always sent role: "pending", never
-    // letting a client self-assign "admin" or even "user" directly.
-    // Returns the newly-created user row.
-    public function register($email, $passwordHash, $name)
-    {
-        $now = date('Y-m-d H:i:s');
-        $data = array(
-            'email' => $email,
-            'password_hash' => $passwordHash,
-            'name' => $name,
-            'role' => 'pending',
-            'created_at' => $now,
-            'updated_at' => $now,
-        );
-        $this->db->insert('users', $data);
-        $userId = $this->db->insert_id();
-
-        $this->db->select('*');
-        $this->db->from('users');
-        $this->db->where('id', $userId);
-        return $this->db->get()->row_array();
-    }
-
-    // ---------- Password reset ----------
-
-    // Same shape as createToken() above, but a much shorter lifetime (1
-    // hour — a reset link sitting in an inbox for 8 hours the way a
-    // login session might is a meaningfully bigger window than makes
-    // sense for this), and stored in password_resets specifically, not
-    // auth_tokens — these are genuinely different things (one proves
-    // "I'm currently logged in", the other proves "I own this email
-    // address right now"), so they don't share a table.
-    public function createPasswordResetToken($userId)
-    {
         $rawToken = bin2hex(random_bytes(32));
-        $tokenHash = hash('sha256', $rawToken);
-        $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
-
         $this->db->insert('password_resets', array(
-            'user_id' => $userId,
-            'token_hash' => $tokenHash,
-            'expires_at' => $expiresAt,
+            'admin_id' => $adminId,
+            'token_hash' => hash('sha256', $rawToken),
+            'expires_at' => date('Y-m-d H:i:s', strtotime('+' . self::RESET_LIFETIME_MINUTES . ' minutes')),
         ));
-
         return $rawToken;
     }
 
-    // Returns the associated user_id if the reset token is genuinely
-    // valid (exists AND not expired), or false otherwise.
+    // The admin id the token belongs to, or false when it is unknown or
+    // expired.
     public function validatePasswordResetToken($rawToken)
     {
         if (empty($rawToken)) {
             return false;
         }
-        $tokenHash = hash('sha256', $rawToken);
-
-        $this->db->select('user_id');
+        $this->db->select('admin_id');
         $this->db->from('password_resets');
-        $this->db->where('token_hash', $tokenHash);
+        $this->db->where('token_hash', hash('sha256', $rawToken));
         $this->db->where('expires_at >', date('Y-m-d H:i:s'));
-        $query = $this->db->get();
-        $row = $query->row_array();
-
-        return $row ? $row['user_id'] : false;
+        $row = $this->db->get()->row_array();
+        return $row ? $row['admin_id'] : false;
     }
 
-    // Single-use — deletes the reset token's row once it's actually been
-    // used, same reasoning as deleteToken() for logout: a reset link
-    // should only ever work once, not remain valid until its natural
-    // expiry even after it's already done its job.
     public function deletePasswordResetToken($rawToken)
     {
-        $tokenHash = hash('sha256', $rawToken);
-        $this->db->where('token_hash', $tokenHash);
+        $this->db->where('token_hash', hash('sha256', $rawToken));
         return $this->db->delete('password_resets');
     }
 
-    public function updatePassword($userId, $newPasswordHash)
-    {
-        $this->db->where('id', $userId);
-        return $this->db->update('users', array(
-            'password_hash' => $newPasswordHash,
-            'updated_at' => date('Y-m-d H:i:s'),
-        ));
-    }
-
-    // Invalidates every existing login session for this user — called
-    // after a successful password reset. If the password was
-    // compromised, any session created before the reset (possibly by
-    // whoever compromised it) shouldn't survive the reset either.
-    public function deleteAllTokensForUser($userId)
-    {
-        $this->db->where('user_id', $userId);
-        return $this->db->delete('auth_tokens');
-    }
-
-    // ---------- Housekeeping ----------
-
-    // Deletes login tokens and password-reset tokens that have expired.
-    // validateToken() and validatePasswordResetToken() already refuse
-    // them, so this changes no behaviour � it only stops the two tables
-    // growing forever. Returns how many rows went from each:
-    //   array('auth_tokens' => int, 'password_resets' => int).
+    // Deletes expired login tokens. validateToken() already refuses them,
+    // so this changes no behaviour; it only stops the table growing
+    // forever. Returns how many rows went.
     public function purgeExpiredTokens()
     {
-        $now = date('Y-m-d H:i:s');
-        $purged = array();
+        $this->db->where('expires_at <', date('Y-m-d H:i:s'));
+        $this->db->delete('auth_tokens');
+        $deleted = $this->db->affected_rows();
 
-        foreach (array('auth_tokens', 'password_resets') as $table) {
-            $this->db->where('expires_at <', $now);
-            $this->db->delete($table);
-            $purged[$table] = $this->db->affected_rows();
-        }
-
-        return $purged;
+        $this->db->where('expires_at <', date('Y-m-d H:i:s'));
+        $this->db->delete('password_resets');
+        return $deleted;
     }
 }

@@ -1,15 +1,6 @@
 <?php
 // Models with their constructors (which load the real database) skipped,
 // so a test can assign a FakeDb to ->db and call the methods directly.
-class EmailModelHarness extends Email_Model
-{
-    public $db;
-
-    public function __construct()
-    {
-    }
-}
-
 class AuthModelHarness extends Auth_Model
 {
     public $db;
@@ -19,7 +10,7 @@ class AuthModelHarness extends Auth_Model
     }
 }
 
-class UsersModelHarness extends Users_Model
+class AdminsModelHarness extends Admins_Model
 {
     public $db;
 
@@ -29,15 +20,6 @@ class UsersModelHarness extends Users_Model
 }
 
 class ElevatorsModelHarness extends Elevators_Model
-{
-    public $db;
-
-    public function __construct()
-    {
-    }
-}
-
-class SavedRoomsModelHarness extends SavedRooms_Model
 {
     public $db;
 

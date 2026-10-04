@@ -14,9 +14,8 @@ require_once APPPATH . 'libraries/Api_input.php';
 require_once APPPATH . 'libraries/Account_policy.php';
 require_once APPPATH . 'libraries/Auth_session.php';
 require_once APPPATH . 'libraries/Neighbor_links.php';
-require_once APPPATH . 'libraries/Account_mail.php';
-require_once APPPATH . 'libraries/Smtp_mailer.php';
 require_once APPPATH . 'libraries/Signage_rules.php';
+require_once APPPATH . 'libraries/Kiosk_rules.php';
 
 // MY_Controller extends CI_Controller and calls show_404(). Stubbed so its
 // own guard and dispatch code can be tested without booting the framework;
@@ -50,7 +49,7 @@ function log_message($level, $message)
 require_once APPPATH . 'core/MY_Controller.php';
 
 // Controllers whose actions are tested directly (see ActionTestCase).
-foreach (array('Auth', 'Nodes', 'Elevators', 'TourStops', 'Buildings', 'Users', 'TourSections', 'PlacardDialogs', 'SavedRooms', 'Signage') as $controller) {
+foreach (array('Auth', 'Nodes', 'Elevators', 'TourStops', 'Buildings', 'Admins', 'TourSections', 'PlacardDialogs', 'Signage', 'Kiosks', 'Analytics', 'Feedback') as $controller) {
     require_once APPPATH . "controllers/{$controller}_API.php";
 }
 // Models extend CI_Model; stubbed so their methods can be called with a
@@ -61,14 +60,12 @@ class CI_Model
 }
 
 require_once APPPATH . 'models/Auth_Model.php';
-require_once APPPATH . 'models/Users_Model.php';
-require_once APPPATH . 'models/Email_Model.php';
+require_once APPPATH . 'models/Rate_limit_Model.php';
+require_once APPPATH . 'models/Admins_Model.php';
 require_once APPPATH . 'models/Elevators_Model.php';
 require_once APPPATH . 'models/Nodes_Model.php';
 require_once APPPATH . 'models/TourStops_Model.php';
-require_once APPPATH . 'models/SavedRooms_Model.php';
 require_once __DIR__ . '/support/FakeDb.php';
-require_once __DIR__ . '/support/FakeMailer.php';
 require_once __DIR__ . '/support/ModelHarnesses.php';
 require_once __DIR__ . '/support/FakeModel.php';
 require_once __DIR__ . '/support/ActionTestCase.php';

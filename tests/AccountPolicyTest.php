@@ -66,7 +66,7 @@ class AccountPolicyTest extends TestCase
         });
 
         $this->assertSame(403, $reply->status());
-        $this->assertSame('Registration is only open to @sdca.edu.ph email addresses.', $reply->body()['error']);
+        $this->assertSame('Accounts are only open to @sdca.edu.ph email addresses.', $reply->body()['error']);
     }
 
     public function foreignEmails()

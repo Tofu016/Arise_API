@@ -6,6 +6,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 require_once APPPATH . 'libraries/Api_response.php';
 require_once APPPATH . 'libraries/Api_input.php';
 require_once APPPATH . 'libraries/Auth_session.php';
+require_once APPPATH . 'libraries/Rate_limit.php';
 // Only for its static Photo_store::isPhotoPath() check; photoStore() still
 // loads the instance through CI (the loader creates it when the class is
 // already declared but not yet attached to the controller).
@@ -15,12 +16,9 @@ require_once APPPATH . 'libraries/Photo_store.php';
 // CI_Controller directly — CodeIgniter 3's own, documented extension
 // mechanism (any file named exactly MY_Controller in application/core/
 // becomes available this way, via the default $config['subclass_prefix']
-// = 'MY_'). Consolidates three things every controller previously
-// duplicated on its own (see TourSections_API's original version):
-// CORS + OPTIONS preflight handling, JSON/form-body parsing, and now
-// the actual permission check — isAdmin() — mirroring the isAdmin()
-// helper function from the original Firestore security rules, just
-// checked here instead of inside the database itself.
+// = 'MY_'). Consolidates three things every controller would otherwise
+// duplicate: CORS + OPTIONS preflight handling, JSON/form-body parsing,
+// and the permission check (requireAdmin()).
 class MY_Controller extends CI_Controller
 {
     // Which website is allowed to call this API (CORS). Env-driven so
@@ -29,10 +27,10 @@ class MY_Controller extends CI_Controller
     private $allowedOrigin;
 
     // Cached after the first check within a single request, so
-    // repeated isAdmin() calls in the same request don't each
-    // re-validate the token against the database.
-    private $currentUser = null;
-    private $currentUserChecked = false;
+    // repeated guard calls in the same request don't each re-validate
+    // the token against the database.
+    private $currentAdmin = null;
+    private $currentAdminChecked = false;
 
     public function __construct()
     {
@@ -48,7 +46,7 @@ class MY_Controller extends CI_Controller
         header('Access-Control-Allow-Origin: ' . $this->allowedOrigin);
         header('Vary: Origin');
         header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, Accept, Authorization');
+        header('Access-Control-Allow-Headers: Content-Type, Accept, Authorization, X-Kiosk-Token');
 
         if ($this->input->method() === 'options') {
             http_response_code(200);
@@ -57,6 +55,7 @@ class MY_Controller extends CI_Controller
 
         $this->load->database();
         $this->load->model('Auth_Model');
+        $this->load->model('Rate_limit_Model');
         date_default_timezone_set('Asia/Manila');
     }
 
@@ -76,70 +75,98 @@ class MY_Controller extends CI_Controller
     }
 
     // Identifies the caller from the Authorization header (see
-    // Auth_session) and validates the token via Auth_Model — returns the
-    // associated user's row (with role) if genuinely valid, or null
-    // otherwise. Protected, not public — controllers should use
-    // isAdmin()/requireAdmin() below rather than reaching in here
-    // directly, same as the original Firestore rules never exposed "the
-    // current auth token" itself, only the derived signedIn()/isAdmin()
-    // checks built on top of it.
-    protected function getCurrentUser()
+    // Auth_session) and validates the token via Auth_Model: the admin's
+    // row if the token is genuinely valid, or null otherwise. Only admins
+    // can sign in at all, so a valid token is an admin's. Protected, not
+    // public: controllers use signedIn()/requireAdmin() below rather than
+    // reaching in here directly.
+    protected function getCurrentAdmin()
     {
-        if ($this->currentUserChecked) {
-            return $this->currentUser;
+        if ($this->currentAdminChecked) {
+            return $this->currentAdmin;
         }
-        $this->currentUserChecked = true;
+        $this->currentAdminChecked = true;
 
-        $this->currentUser = Auth_session::userFor(
+        $this->currentAdmin = Auth_session::adminFor(
             $this->input->get_request_header('Authorization'),
             array($this->Auth_Model, 'validateToken')
         );
-        return $this->currentUser;
+        return $this->currentAdmin;
     }
 
-    // Mirrors signedIn() from the original Firestore rules.
     protected function signedIn()
     {
-        return $this->getCurrentUser() !== null;
+        return $this->getCurrentAdmin() !== null;
     }
 
-    // Mirrors isAdmin() from the original Firestore rules.
-    protected function isAdmin()
-    {
-        $user = $this->getCurrentUser();
-        return $user !== null && $user['role'] === 'admin';
-    }
-
-    // Call at the top of any method that should be admin-only — stops
-    // the action with a 401/403 reply if the check fails, same shape as
-    // how the original Firestore rules simply refused a query outright
-    // rather than letting application code decide what to do about it.
-    // Throws an Api_abort that _remap turns into the reply; only ever
-    // call this from inside an action, never a constructor.
+    // Call at the top of any method that should be admin-only: stops the
+    // action with a 401 reply when no admin is signed in. Throws an
+    // Api_abort that _remap turns into the reply; only ever call this from
+    // inside an action, never a constructor.
     protected function requireAdmin()
     {
         if (!$this->signedIn()) {
             throw new Api_abort(Api_response::fail(401, 'Not signed in.'));
         }
-        if (!$this->isAdmin()) {
-            throw new Api_abort(Api_response::fail(403, 'Admin access required.'));
-        }
     }
 
-    // Call at the top of an action that any approved account may use (a
-    // user's own data, like saved rooms): 401 when not signed in, 403 while
-    // the account is still waiting for an admin's approval. Returns the
-    // signed-in user row. Same rules as requireAdmin() about where to call it.
-    protected function requireApprovedUser()
+    // Sends one HTML email through CodeIgniter's email library (see
+    // config/email.php). A failure is logged and returned as false, never
+    // thrown: an email that cannot go out must not fail the request that
+    // asked for it (the account exists either way).
+    protected function sendMail($to, array $mail)
     {
-        $user = $this->getCurrentUser();
-        if ($user === null) {
-            throw new Api_abort(Api_response::fail(401, 'Not signed in.'));
+        $this->load->library('email');
+        $this->email->clear();
+        $this->email->from($_ENV['EMAIL_FROM'] ?? 'noreply@sdca.edu.ph', $_ENV['EMAIL_FROM_NAME'] ?? 'ARISE Campus Navigator');
+        $this->email->to($to);
+        $this->email->subject($mail['subject']);
+        $this->email->message($mail['html']);
+        if (!@$this->email->send(false)) {
+            log_message('error', 'Email to ' . $to . ' failed: ' . $this->email->print_debugger(array('headers')));
+            return false;
         }
-        if (!in_array($user['role'], array('user', 'admin'), true)) {
-            throw new Api_abort(Api_response::fail(403, 'Your account is waiting for approval.'));
+        return true;
+    }
+
+    // The web app's own address, for links inside emails. FRONTEND_URL, or
+    // the first CORS_ORIGIN, which is the same address in a normal setup.
+    protected function frontendUrl()
+    {
+        $url = trim($_ENV['FRONTEND_URL'] ?? '');
+        if ($url !== '') {
+            return $url;
         }
-        return $user;
+        $origins = explode(',', $_ENV['CORS_ORIGIN'] ?? 'http://localhost:5173');
+        return trim($origins[0]);
+    }
+
+    protected function clientIp()
+    {
+        return $this->input->ip_address();
+    }
+
+    // Stops the action with a 429 when $subject already has $max hits in
+    // bucket $bucket inside the last $windowSeconds. Check only: nothing is
+    // recorded, so a caller that counts failures (login) records them itself
+    // with recordRateHit(), and one that counts every request calls both.
+    // $message may hold one %d, filled with the seconds to wait. The reply
+    // also carries retry_after for the client. Same Api_abort rule as
+    // requireAdmin(): only call this from inside an action.
+    protected function enforceRateLimit($bucket, $subject, $max, $windowSeconds, $message)
+    {
+        $now = date('Y-m-d H:i:s');
+        $since = Rate_limit::windowStart($now, $windowSeconds);
+        if ((int) $this->Rate_limit_Model->countSince($bucket, $subject, $since) < $max) {
+            return;
+        }
+        $retryAfter = Rate_limit::retryAfter($this->Rate_limit_Model->oldestSince($bucket, $subject, $since), $now, $windowSeconds);
+        throw new Api_abort(Api_response::fail(429, sprintf($message, $retryAfter), array('retry_after' => $retryAfter)));
+    }
+
+    protected function recordRateHit($bucket, $subject)
+    {
+        $this->Rate_limit_Model->record($bucket, $subject, date('Y-m-d H:i:s'));
     }
 
     // Every request to a controller extending this one comes through
@@ -160,22 +187,6 @@ class MY_Controller extends CI_Controller
         if ($response !== null) {
             $response->emit();
         }
-    }
-
-    // The web app's own address (scheme + host, no trailing slash), for
-    // building links that point at it — the password-reset email's link,
-    // for one. FRONTEND_URL if set; otherwise CORS_ORIGIN, which is the
-    // same address in a normal deployment (see DEPLOY.md), so setting
-    // that alone is enough; otherwise the local Vite dev server. A blank
-    // value counts as unset.
-    protected function frontendUrl()
-    {
-        foreach (array('FRONTEND_URL', 'CORS_ORIGIN') as $key) {
-            if (!empty($_ENV[$key])) {
-                return rtrim(trim(explode(',', $_ENV[$key])[0]), '/');
-            }
-        }
-        return 'http://localhost:5173';
     }
 
     // The one Photo store every upload, serve and gallery endpoint

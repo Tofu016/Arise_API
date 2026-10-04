@@ -88,7 +88,6 @@ class ElevatorsActionsTest extends ActionTestCase
     public function testWritesAreAdminOnly($action, array $params)
     {
         $this->assertReply($this->call('ElevatorsApiHarness', $action, $params, array(), $this->models(), null), 401, 'Not signed in.');
-        $this->assertReply($this->call('ElevatorsApiHarness', $action, $params, array(), $this->models(), array('id' => '2', 'role' => 'user')), 403, 'Admin access required.');
         $this->assertSame(array(), $this->controller->Elevators_Model->calls);
     }
 

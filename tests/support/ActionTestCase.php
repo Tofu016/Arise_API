@@ -10,9 +10,28 @@ trait ControllerHarness
     public $body = array();
     public $user = null;
     public $input;
+    public $ip = '10.0.0.5';
+    // Emails the action asked to send, as array(to, mail), instead of sending.
+    public $mails = array();
 
     public function __construct()
     {
+    }
+
+    protected function clientIp()
+    {
+        return $this->ip;
+    }
+
+    protected function sendMail($to, array $mail)
+    {
+        $this->mails[] = array($to, $mail);
+        return true;
+    }
+
+    protected function frontendUrl()
+    {
+        return 'http://app.test';
     }
 
     protected function getInput()
@@ -20,7 +39,7 @@ trait ControllerHarness
         return $this->body;
     }
 
-    protected function getCurrentUser()
+    protected function getCurrentAdmin()
     {
         return $this->user;
     }
@@ -51,10 +70,10 @@ class BuildingsApiHarness extends Buildings_API
     public $modelNames = array('Buildings_Model');
 }
 
-class UsersApiHarness extends Users_API
+class AdminsApiHarness extends Admins_API
 {
     use ControllerHarness;
-    public $modelNames = array('Users_Model', 'Auth_Model', 'Email_Model');
+    public $modelNames = array('Admins_Model', 'Auth_Model');
 }
 
 class TourSectionsApiHarness extends TourSections_API
@@ -67,12 +86,6 @@ class PlacardDialogsApiHarness extends PlacardDialogs_API
 {
     use ControllerHarness;
     public $modelNames = array('PlacardDialogs_Model');
-}
-
-class SavedRoomsApiHarness extends SavedRooms_API
-{
-    use ControllerHarness;
-    public $modelNames = array('SavedRooms_Model', 'PlacardDialogs_Model');
 }
 
 // Records the media it would have discarded instead of touching the photo
@@ -89,10 +102,44 @@ class SignageApiHarness extends Signage_API
     }
 }
 
+// Stands in for CI's input object: the kiosk token header and the caller's IP.
+class FakeKioskInput
+{
+    public $token;
+
+    public function get_request_header($name)
+    {
+        return $name === 'X-Kiosk-Token' ? $this->token : null;
+    }
+
+    public function ip_address()
+    {
+        return '10.0.0.5';
+    }
+}
+
+class KiosksApiHarness extends Kiosks_API
+{
+    use ControllerHarness;
+    public $modelNames = array('Kiosks_Model');
+}
+
+class AnalyticsApiHarness extends Analytics_API
+{
+    use ControllerHarness;
+    public $modelNames = array('Analytics_Model', 'Kiosks_Model', 'Rate_limit_Model');
+}
+
+class FeedbackApiHarness extends Feedback_API
+{
+    use ControllerHarness;
+    public $modelNames = array('Feedback_Model', 'Rate_limit_Model');
+}
+
 class AuthApiHarness extends Auth_API
 {
     use ControllerHarness;
-    public $modelNames = array('Auth_Model', 'Email_Model');
+    public $modelNames = array('Auth_Model', 'Admins_Model', 'Rate_limit_Model');
 }
 
 abstract class ActionTestCase extends TestCase
@@ -111,7 +158,7 @@ abstract class ActionTestCase extends TestCase
     {
         $c = new $harnessClass();
         $c->body = $body;
-        $c->user = $user === false ? array('id' => '1', 'role' => 'admin') : $user;
+        $c->user = $user === false ? array('id' => '1') : $user;
         foreach ($c->modelNames as $model) {
             $c->$model = new FakeModel(isset($returns[$model]) ? $returns[$model] : array());
         }

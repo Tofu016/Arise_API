@@ -22,7 +22,7 @@ reads it via `index.php`; `.env.example` is the committed template.
 |---|---|
 | PHP 8.1 | CI3 3.1.13 supports 7.2–8.1. 8.2/8.3 run but emit deprecation noise. |
 | PHP extensions | `mysqli`, `curl`, `mbstring`, `xml`, `gd`, `intl`, `fileinfo`, `openssl`, `zip` |
-| Composer 2 | to install `phpmailer` + `vlucas/phpdotenv` |
+| Composer 2 | to install `vlucas/phpdotenv` |
 | MySQL 8 / MariaDB 10.4+ | `utf8mb4` |
 | Apache 2.4 + `mod_rewrite` | `AllowOverride All` on the site directory so `.htaccess` is honoured |
 | Git | for clone / pull |
@@ -76,10 +76,12 @@ sudo chmod -R 775 uploads protected-uploads
 
 - `uploads/` — public tour images. Sits under DocumentRoot, so Apache
   serves it directly at `https://…/uploads/…` (no extra config).
-- `protected-uploads/` — login-gated images, streamed only through
-  `IndoorUploads_API::serve()` after an auth check. It **also** sits
-  under DocumentRoot, so A7 and A8 explicitly forbid Apache from serving
-  it — that deny rule is the only thing keeping those images private.
+- `protected-uploads/` — indoor images, streamed only through
+  `IndoorUploads_API::serve()`, which has no auth check (anyone who knows
+  a path can view it; uploading is admin-only). It **also** sits under
+  DocumentRoot, so A7 and A8 explicitly forbid Apache from serving it —
+  that deny rule is the only thing stopping Apache handing the files out
+  directly, around `serve()`.
   (A sturdier option — moving this folder outside the web root entirely —
   was deliberately deferred; revisit it before this handles anything
   genuinely sensitive.)
@@ -107,12 +109,6 @@ DB_PASS=<a real password>
 DB_NAME=arise_web
 UPLOAD_ROOT=/var/www/arise-api/uploads/
 PROTECTED_UPLOAD_ROOT=/var/www/arise-api/protected-uploads/
-SMTP_HOST=<transactional provider>
-SMTP_PORT=587
-SMTP_USER=<...>
-SMTP_PASS=<...>
-SMTP_FROM_EMAIL=noreply@sdca.edu.ph
-SMTP_FROM_NAME="ARISE Campus Navigator"
 ```
 
 - **`CI_ENV=production`** turns off `db_debug` and hides PHP errors. Do
@@ -121,12 +117,7 @@ SMTP_FROM_NAME="ARISE Campus Navigator"
   (`VITE_API_BASE_URL` minus the `/index.php`). URLs keep `/index.php/`
   in the path unless you add a rewrite rule (see notes).
 - **`CORS_ORIGIN`** is the exact scheme + host of the deployed web app,
-  no trailing slash. Native apps (Expo) don't need it. It is also the
-  address the password-reset email links to (unless `FRONTEND_URL` is
-  set), so it must be the real web app address — before this was fixed,
-  reset links always pointed at `http://localhost:5173`.
-- **`FRONTEND_URL`** is optional. Set it only if the web app's address
-  for links differs from `CORS_ORIGIN`.
+  no trailing slash. Native apps (Expo) don't need it.
 - **`UPLOAD_ROOT` / `PROTECTED_UPLOAD_ROOT`** — set both explicitly to
   absolute paths (trailing slash). Don't leave them blank on the server:
   the blank-value fallback for `PROTECTED_UPLOAD_ROOT` resolves to two
@@ -147,9 +138,9 @@ sudo mysql -e "GRANT ALL PRIVILEGES ON arise_web.* TO 'arise'@'localhost'; FLUSH
 mysql -u arise -p arise_web < schema.sql
 ```
 
-Then create the first admin account by hand — follow **`SEED.md`**
-(a fresh database has no accounts, and nobody can self-promote to
-`admin`).
+Then create the first admin account from the command line, following
+**`SEED.md`** (a fresh database has no accounts, and there is no
+approved admin, so nobody can create one through the app).
 
 ### A6. Make the writable directories writable
 
@@ -176,8 +167,8 @@ sudo chmod -R 775 application/logs application/cache
         Options -Indexes
     </Directory>
 
-    # Login-gated images — Apache must NEVER serve these directly; the only
-    # legitimate way in is IndoorUploads_API::serve() after an auth check.
+    # Indoor images — Apache must NEVER serve these directly; the only
+    # legitimate way in is IndoorUploads_API::serve().
     <Directory /var/www/arise-api/protected-uploads>
         Require all denied
     </Directory>
@@ -212,7 +203,7 @@ RewriteRule ^protected-uploads/       - [F]      # belt-and-braces with the vhos
 
 The `protected-uploads/` line repeats the vhost `<Directory>` deny from
 A7 on purpose — if someone later edits the vhost and drops that block,
-this still holds. Both exist because these images have no other guard.
+this still holds. Both exist because nothing else stops Apache serving these files directly.
 
 Verify:
 
@@ -239,50 +230,22 @@ max_input_time      = 120
 sudo systemctl restart apache2
 ```
 
-### A10. Cron — the outgoing-email worker
+### A10. Cron — housekeeping
 
-`Cron_API::processEmails` sends anything queued in `email_queue`. It is
-CLI-only (`is_cli_request()` guards it). `crontab -e`:
-
-```cron
-*/2 * * * * cd /var/www/arise-api && /usr/bin/php index.php Cron_API processEmails >> /var/log/arise-cron.log 2>&1
-```
-
-Test once by hand first: `cd /var/www/arise-api && php index.php Cron_API processEmails`
-→ `Processed: 0 sent, 0 failed.`
-
-A failed email is never dropped. It stays queued, each failure adds one to
-its `attempts` and records the reason in `last_error`, and the queue is
-read fresh-mail-first, so an undeliverable address can never block the
-emails behind it (and a long SMTP outage loses nothing — everything goes
-out once it is back). To see emails that keep failing:
-
-```sql
-SELECT id, to_email, subject, attempts, last_error, created_at
-FROM email_queue WHERE sent_at IS NULL AND attempts >= 5
-ORDER BY attempts DESC;
-```
-
-A row for a bad address will never succeed; delete it once you have looked
-(`DELETE FROM email_queue WHERE id = <id>`). Resetting `attempts` to 0 puts
-one back at the front of the queue.
-
-### A10b. Cron — housekeeping
-
-`Cron_API::purgeExpired` deletes expired login and password-reset tokens
-and emails sent more than 30 days ago. It never touches an unsent email.
-CLI-only, like `processEmails`. Once a day is plenty:
+`Cron_API::purgeExpired` deletes expired login tokens. CLI-only
+(`is_cli_request()` guards it). Once a day is plenty:
 
 ```cron
 10 3 * * * cd /var/www/arise-api && /usr/bin/php index.php Cron_API purgeExpired >> /var/log/arise-cron.log 2>&1
 ```
 
 Test once by hand: `php index.php Cron_API purgeExpired` →
-`Purged: 0 login tokens, 0 reset tokens, 0 sent emails.`
+`Purged: 0 login tokens.`
 
-`Cron_API::closeStaleSessions` closes desktop Analytics sessions
-(`analytics_sessions.platform = 'desktop'`) that have gone 30 minutes with
-no new tracked event and no `ended_at` yet — a desktop visitor has no
+`Cron_API::closeStaleSessions` closes web Analytics sessions
+(`analytics_sessions.platform = 'web'`, i.e. any session not from a paired
+kiosk) that have gone 30 minutes with
+no new tracked event and no `ended_at` yet — a web visitor has no
 reliable "tab closed" signal, unlike kiosk (see useAnalytics.js), so this
 is what actually ends those sessions for the Analytics dashboard's average
 duration and funnel. Same CLI-only guard, same cadence is fine:
@@ -293,7 +256,7 @@ duration and funnel. Same CLI-only guard, same cadence is fine:
 
 A closed session's `ended_at` is its last tracked event, not the time the
 cron ran, so running it once a day doesn't skew durations. It only means
-still-open desktop sessions stay out of the average duration until the next
+still-open web sessions stay out of the average duration until the next
 run. If that lag matters, run it every 30 minutes instead:
 
 ```cron
@@ -301,7 +264,7 @@ run. If that lag matters, run it every 30 minutes instead:
 ```
 
 Test once by hand: `php index.php Cron_API closeStaleSessions` →
-`Closed: 0 stale desktop analytics sessions.`
+`Closed: 0 stale web analytics sessions.`
 
 ### A11. HTTPS
 
@@ -356,22 +319,6 @@ date with the statements below, oldest first, by hand. Apply an entry
 **before** deploying the code that needs it. Each is additive (new columns
 with defaults), so the previous code keeps working against the changed
 table and a rollback needs no schema change.
-
-**Email retry tracking** — adds `attempts` and `last_error` to
-`email_queue` (commit "Stop failing emails from starving the queue"):
-
-```sql
-ALTER TABLE email_queue
-  ADD COLUMN attempts   int(10) unsigned NOT NULL DEFAULT 0 AFTER body_html,
-  ADD COLUMN last_error varchar(500)     DEFAULT NULL       AFTER attempts;
-```
-
-```bash
-mysql -u arise -p arise_web -e "ALTER TABLE email_queue ADD COLUMN attempts int(10) unsigned NOT NULL DEFAULT 0 AFTER body_html, ADD COLUMN last_error varchar(500) DEFAULT NULL AFTER attempts"
-```
-
-Until it is applied, `Cron_API processEmails` fails loudly (unknown column
-`attempts`) rather than sending — so apply it first.
 
 **Starting node per floor** — adds `is_starting_node` to `nodes`, the node
 an admin flags as where the kiosk drops visitors who pick that building floor:
@@ -473,36 +420,9 @@ fine). Until applied, `Nodes_API create`/`update` fail (unknown column
 first. Not additive like the others above, since it also renames the
 column — deploy the code and the migration together.
 
-**Saved rooms** — adds the `saved_rooms` table behind `SavedRooms_API`
-(the mobile app's bookmark on a room card): which rooms each account has
-saved, pointing at the room's details record so a rename doesn't break it.
-Rows go with their user or the room's details (`ON DELETE CASCADE`):
-
-```sql
-CREATE TABLE saved_rooms (
-  id                int(10) unsigned NOT NULL AUTO_INCREMENT,
-  user_id           int(10) unsigned NOT NULL,
-  placard_dialog_id int(10) unsigned NOT NULL,
-  created_at        datetime NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (id),
-  UNIQUE KEY user_room (user_id, placard_dialog_id),
-  KEY placard_dialog_id (placard_dialog_id),
-  CONSTRAINT saved_rooms_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT saved_rooms_ibfk_2 FOREIGN KEY (placard_dialog_id) REFERENCES placard_dialogs (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-```
-
-```bash
-mysql -u arise -p arise_web -e "CREATE TABLE saved_rooms (id int(10) unsigned NOT NULL AUTO_INCREMENT, user_id int(10) unsigned NOT NULL, placard_dialog_id int(10) unsigned NOT NULL, created_at datetime NOT NULL DEFAULT current_timestamp(), PRIMARY KEY (id), UNIQUE KEY user_room (user_id, placard_dialog_id), KEY placard_dialog_id (placard_dialog_id), CONSTRAINT saved_rooms_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE, CONSTRAINT saved_rooms_ibfk_2 FOREIGN KEY (placard_dialog_id) REFERENCES placard_dialogs (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-```
-
-Purely additive: no existing table changes. Until it is applied, every
-`SavedRooms_API` call fails (unknown table `saved_rooms`) — the rest of the
-API is unaffected. Apply it before shipping an app build that uses it.
-
 **Analytics tables** — adds `analytics_sessions` and `analytics_events`
 behind `Analytics_API` (the Analytics dashboard, replacing the plain
-Feedback admin page): one row per kiosk/desktop session, one row per
+Feedback admin page): one row per kiosk/web session, one row per
 tracked action (stage reached, room searched, go-to, directions requested,
 walk/jump, feedback submitted, session end). `analytics_sessions` must be
 created first, since `analytics_events.session_id` references it:
@@ -510,7 +430,7 @@ created first, since `analytics_events.session_id` references it:
 ```sql
 CREATE TABLE analytics_sessions (
   id char(36) NOT NULL,
-  platform enum('kiosk','desktop') NOT NULL,
+  platform enum('kiosk','web') NOT NULL,
   campus varchar(64) DEFAULT NULL,
   building varchar(64) DEFAULT NULL,
   started_at datetime NOT NULL DEFAULT current_timestamp(),
@@ -544,7 +464,7 @@ CREATE TABLE analytics_events (
 ```
 
 ```bash
-mysql -u arise -p arise_web -e "CREATE TABLE analytics_sessions (id char(36) NOT NULL, platform enum('kiosk','desktop') NOT NULL, campus varchar(64) DEFAULT NULL, building varchar(64) DEFAULT NULL, started_at datetime NOT NULL DEFAULT current_timestamp(), ended_at datetime DEFAULT NULL, end_reason enum('feedback','idle_timeout','inactivity_timeout') DEFAULT NULL, furthest_stage enum('start','campus','building','floor','exploring','feedback') NOT NULL DEFAULT 'start', gave_feedback tinyint(1) NOT NULL DEFAULT 0, feedback_id int(10) unsigned DEFAULT NULL, PRIMARY KEY (id), KEY platform_started (platform, started_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+mysql -u arise -p arise_web -e "CREATE TABLE analytics_sessions (id char(36) NOT NULL, platform enum('kiosk','web') NOT NULL, campus varchar(64) DEFAULT NULL, building varchar(64) DEFAULT NULL, started_at datetime NOT NULL DEFAULT current_timestamp(), ended_at datetime DEFAULT NULL, end_reason enum('feedback','idle_timeout','inactivity_timeout') DEFAULT NULL, furthest_stage enum('start','campus','building','floor','exploring','feedback') NOT NULL DEFAULT 'start', gave_feedback tinyint(1) NOT NULL DEFAULT 0, feedback_id int(10) unsigned DEFAULT NULL, PRIMARY KEY (id), KEY platform_started (platform, started_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
 mysql -u arise -p arise_web -e "CREATE TABLE analytics_events (id bigint(20) unsigned NOT NULL AUTO_INCREMENT, session_id char(36) NOT NULL, event_type enum('stage_reached','room_searched','go_to','directions_requested','move','feedback_submitted','session_end') NOT NULL, stage varchar(32) DEFAULT NULL, node_id varchar(64) DEFAULT NULL, from_node_id varchar(64) DEFAULT NULL, to_node_id varchar(64) DEFAULT NULL, room_query varchar(255) DEFAULT NULL, matched tinyint(1) DEFAULT NULL, move_kind enum('walk','jump') DEFAULT NULL, created_at datetime NOT NULL DEFAULT current_timestamp(), PRIMARY KEY (id), KEY session_id (session_id), KEY event_type_created (event_type, created_at), KEY from_to (from_node_id, to_node_id), CONSTRAINT analytics_events_ibfk_1 FOREIGN KEY (session_id) REFERENCES analytics_sessions (id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
 ```
 
@@ -601,8 +521,8 @@ mysql -u arise -p arise_web -e "CREATE TABLE signage_settings (id tinyint(3) uns
 Purely additive: no existing table changes. Until it is applied,
 `Signage_API` calls fail (unknown table), the kiosk simply shows its plain
 bottom band, and the rest of the API is unaffected. Videos count against
-`upload_max_filesize`/`post_max_size` like any upload (the A-section values
-above allow 64 MB); a 1080 x 336 loop of 15-30 seconds is normally a few MB.
+`upload_max_filesize`/`post_max_size` like any upload (the A9 values
+above allow 100 MB); a 1080 x 336 loop of 15-30 seconds is normally a few MB.
 
 Times on screen are in tenths of a second (`decimal(4,1)`, e.g. 7.5). A
 database that got an earlier draft of these tables, with whole-second
@@ -628,6 +548,88 @@ mysql -u arise -p arise_web -e "ALTER TABLE placard_dialogs ADD COLUMN contact_n
 
 Until it is applied, saving a room in the Room Editor fails (unknown column
 `contact_number`), so apply it first.
+
+**Kiosks** — adds `kiosks` and `kiosk_pair_failures` behind `Kiosks_API`:
+the physical devices an admin registers (each tied to a map node) and pairs
+once with a short-lived, single-use code. Only the hashes of the code and
+of the device's token are stored; `kiosk_pair_failures` is the per-IP log
+that rate-limits wrong codes:
+
+```sql
+CREATE TABLE kiosks (
+  id int(10) unsigned NOT NULL AUTO_INCREMENT,
+  name varchar(120) NOT NULL,
+  node_id varchar(64) DEFAULT NULL,
+  pairing_code_hash char(64) DEFAULT NULL,
+  pairing_expires_at datetime DEFAULT NULL,
+  token_hash char(64) DEFAULT NULL,
+  paired_at datetime DEFAULT NULL,
+  last_seen_at datetime DEFAULT NULL,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (id),
+  KEY idx_kiosks_code (pairing_code_hash),
+  KEY idx_kiosks_token (token_hash),
+  KEY node_id (node_id),
+  CONSTRAINT kiosks_ibfk_1 FOREIGN KEY (node_id) REFERENCES nodes (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE kiosk_pair_failures (
+  id int(10) unsigned NOT NULL AUTO_INCREMENT,
+  ip varchar(45) NOT NULL,
+  attempted_at datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (id),
+  KEY idx_pair_failures_ip (ip, attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+Purely additive. Until it is applied, every `Kiosks_API` call fails, and so
+does any `Analytics_API::track` call that carries a `kiosk_token`.
+
+**Analytics platform `desktop` becomes `web`** — the platform is now decided
+by the server: `kiosk` only for a paired kiosk's session, `web` for every
+other (a browser that merely shows the Compact layout included).
+Not additive: the old code writes `desktop`, which the new enum rejects, so
+deploy the code and this migration together, in this order (the enum is
+widened first so the existing rows stay valid while they are converted):
+
+```sql
+ALTER TABLE analytics_sessions MODIFY platform enum('kiosk','desktop','web') NOT NULL;
+UPDATE analytics_sessions SET platform = 'web' WHERE platform = 'desktop';
+ALTER TABLE analytics_sessions MODIFY platform enum('kiosk','web') NOT NULL;
+```
+
+Existing `kiosk` rows keep that value even though they predate pairing, so
+the dashboard's kiosk figures include them until you delete or reclassify
+them by hand.
+
+**Admins only, no email** — turns `users` into `admins` (no `role` column,
+non-admin accounts deleted), renames `auth_tokens.user_id` to `admin_id`,
+and drops `saved_rooms`, `password_resets` and `email_queue`. Not
+additive: back up first and deploy the code together with the migration.
+Run it once from the project root:
+
+```bash
+mysql -u arise -p arise_web < migrations/2026-10-04_admins_only_no_email.sql
+```
+
+After it, `Cron_API processEmails` and the `SMTP_*` settings no longer
+exist: remove that cron entry. A fresh install needs none of this, only
+the first admin from `SEED.md`.
+
+**Account approval and emailed password reset** — adds `admins.status`
+(`pending` or `approved`; existing admins stay `approved`) and the
+`password_resets` table. Run once, after the migration above:
+
+```bash
+mysql -u arise -p arise_web < migrations/2026-10-05_pending_and_password_reset.sql
+```
+
+Then set the `EMAIL_*` and `FRONTEND_URL` values from `.env.example`. The
+default, PHP `mail()`, needs no other service but its messages often land in
+spam or never arrive from a shared host or XAMPP; point `EMAIL_PROTOCOL=smtp`
+at a real mail server if that happens. Mail is sent straight from the
+request (no queue, no cron): a failed send is logged to
+`application/logs/` and the request still succeeds.
 
 ---
 
@@ -672,12 +674,10 @@ Also back up the uploaded images — `/var/www/arise-api/uploads/` and
 | `CI_ENV` | `production` | `development` on laptops only — it exposes errors |
 | `BASE_URL` | `https://api.yourdomain.edu.ph/` | trailing slash; must match the front-end build |
 | `CORS_ORIGIN` | `https://app.yourdomain.edu.ph` | exact origin, no trailing slash |
-| `FRONTEND_URL` | *(blank)* | optional; the web app's address for links in emails (password reset). Blank = use `CORS_ORIGIN` |
 | `DB_HOST` | `localhost` | co-locate DB with PHP — CI3 opens one connection per request |
 | `DB_USER` / `DB_PASS` / `DB_NAME` | `arise` / … / `arise_web` | |
 | `UPLOAD_ROOT` | `/var/www/arise-api/uploads/` | absolute, trailing slash; folder is under DocumentRoot and served directly |
 | `PROTECTED_UPLOAD_ROOT` | `/var/www/arise-api/protected-uploads/` | absolute, trailing slash; under DocumentRoot but Apache is told to deny it (A7 + A8) |
-| `SMTP_HOST` … `SMTP_FROM_NAME` | Brevo / Mailgun / Postmark | quote values with spaces |
 
 Blank or missing keys fall back to the hard-coded development defaults in
 the code.

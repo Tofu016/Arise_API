@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-// Two tables: analytics_sessions (one row per kiosk/desktop session, with a
+// Two tables: analytics_sessions (one row per kiosk/web session, with a
 // denormalized furthest_stage so the funnel query doesn't need to scan
 // every event) and analytics_events (one row per tracked action). See
 // DEPLOY.md's "Schema changes for a live database" entry for both.
@@ -38,7 +38,7 @@ class Analytics_Model extends CI_Model
     // Creates the session row the first time it's seen; a later track()
     // call for the same id only touches campus/building (COALESCE-style:
     // never overwrites a known value with null).
-    public function ensureSession($sessionId, $platform, $campus, $building)
+    public function ensureSession($sessionId, $platform, $campus, $building, $hasGate = false)
     {
         $existing = $this->db->get_where($this->sessions, array('id' => $sessionId))->row_array();
         if (!$existing) {
@@ -48,11 +48,12 @@ class Analytics_Model extends CI_Model
                 'campus' => $campus,
                 'building' => $building,
                 'started_at' => $this->now(),
-                // Desktop has no campus/building/floor gate (see
-                // useKioskSession.js) — it's "exploring" from the first
-                // moment, so its funnel baseline reflects that instead of
-                // sitting at 'start' until a stage_reached event arrives.
-                'furthest_stage' => $platform === 'desktop' ? 'exploring' : 'start',
+                // Only the Compact layout has the campus/building/floor gate
+                // (see useKioskSession.js), whatever the platform: without
+                // it a session is "exploring" from the first moment, so its
+                // funnel baseline reflects that instead of sitting at
+                // 'start' until a stage_reached event arrives.
+                'furthest_stage' => $hasGate ? 'start' : 'exploring',
             ));
             return;
         }
@@ -127,7 +128,7 @@ class Analytics_Model extends CI_Model
 
         // Doesn't end the session: a kiosk visitor can tap "Keep exploring"
         // after rating, so the session really ends on the client's
-        // session_end (sent on reset, or on desktop right before its
+        // session_end (sent on reset, or on the web layout right before its
         // session id rotates).
         if ($event['event_type'] === 'feedback_submitted') {
             $this->advanceStage($sessionId, 'feedback');
@@ -158,11 +159,11 @@ class Analytics_Model extends CI_Model
         $currentRank = array_search($session['furthest_stage'], $this->stageOrder, true);
         if ($currentRank === false || $rank > $currentRank) {
             $patch = array('furthest_stage' => $stage);
-            // A kiosk session row is created the moment the attract screen
+            // A gated session row is created the moment the attract screen
             // mounts, which can be hours before anyone walks up. Restarting
             // the clock on the first real tap keeps that idle wait out of
             // durations, trends and the date filter.
-            if ($session['platform'] === 'kiosk' && $session['furthest_stage'] === 'start') {
+            if ($session['furthest_stage'] === 'start') {
                 $patch['started_at'] = $this->now();
             }
             $this->db->where('id', $sessionId)->update($this->sessions, $patch);
@@ -184,7 +185,7 @@ class Analytics_Model extends CI_Model
             $this->db->where("{$alias}.platform", $filters['platform']);
         }
         // A session matches a building if it started there (kiosk pick /
-        // desktop filter) or walked/jumped into any node in it, so sessions
+        // web filter) or walked/jumped into any node in it, so sessions
         // that crossed buildings aren't attributed to their first one only.
         if (!empty($filters['building'])) {
             $building = $this->db->escape($filters['building']);
@@ -225,17 +226,17 @@ class Analytics_Model extends CI_Model
         );
     }
 
-    // See Analytics_Model's stageOrder comment: a desktop session never has
-    // a real campus/building/floor stage, so its funnel is the two stages
-    // that actually apply. A kiosk (or unfiltered/default) funnel gets the
-    // full sequence.
+    // See Analytics_Model's stageOrder comment: a web session has no real
+    // campus/building/floor gate to drop out at, so its funnel is the two
+    // stages that actually apply. A kiosk (or unfiltered/default) funnel
+    // gets the full sequence.
     public function funnel($filters)
     {
-        $isDesktop = isset($filters['platform']) && $filters['platform'] === 'desktop';
-        $stages = $isDesktop ? array('exploring', 'feedback') : array('start', 'campus', 'building', 'floor', 'exploring', 'feedback');
+        $isWeb = isset($filters['platform']) && $filters['platform'] === 'web';
+        $stages = $isWeb ? array('exploring', 'feedback') : array('start', 'campus', 'building', 'floor', 'exploring', 'feedback');
         // filtersFromQuery() always sets the key (null when absent), so an
         // array union (+) would never apply this default.
-        if (!$isDesktop) {
+        if (!$isWeb) {
             $filters['platform'] = 'kiosk';
         }
 
@@ -401,16 +402,16 @@ class Analytics_Model extends CI_Model
         return $series;
     }
 
-    // Desktop sessions have no explicit end event (see useAnalytics.js's
+    // Web sessions have no explicit end event (see useAnalytics.js's
     // own comment on why: no reliable unload signal) — a session is
     // considered abandoned once it's gone $minutes without a new event
     // and still has no ended_at. Run from Cron_API::closeStaleSessions;
-    // kiosk sessions are excluded since idle_timeout/feedback already
-    // close those client-side and a kiosk left mid-flyover shouldn't get
-    // silently closed under it.
+    // paired-kiosk sessions are excluded since idle_timeout/feedback
+    // already close those client-side and a kiosk left mid-flyover
+    // shouldn't get silently closed under it.
     // ended_at is the session's last activity, not the time this cron run
     // happened to notice it; otherwise a once-a-day cron would stretch
-    // desktop durations by up to a day.
+    // web durations by up to a day.
     public function closeStaleSessions($minutes = 30)
     {
         $cutoff = date('Y-m-d H:i:s', strtotime("-{$minutes} minutes"));
@@ -418,7 +419,7 @@ class Analytics_Model extends CI_Model
         $this->db->select('analytics_sessions.id, MAX(analytics_events.created_at) AS last_event_at, analytics_sessions.started_at');
         $this->db->from($this->sessions);
         $this->db->join($this->events, "{$this->events}.session_id = {$this->sessions}.id", 'left');
-        $this->db->where('analytics_sessions.platform', 'desktop');
+        $this->db->where('analytics_sessions.platform', 'web');
         $this->db->where('analytics_sessions.ended_at', null);
         $this->db->group_by('analytics_sessions.id');
         $rows = $this->db->get()->result_array();

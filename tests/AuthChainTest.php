@@ -17,7 +17,7 @@ class FakeInput
     }
 }
 
-// A controller that runs MY_Controller's REAL getCurrentUser (unlike the
+// A controller that runs MY_Controller's REAL getCurrentAdmin (unlike the
 // action harness, which stubs it): the header comes from FakeInput and the
 // token lookup from a FakeModel's validateToken.
 class AuthGuardHarness extends MY_Controller
@@ -36,7 +36,7 @@ class AuthGuardHarness extends MY_Controller
 
     public function whoAmI()
     {
-        return Api_response::ok(array('user' => $this->getCurrentUser()));
+        return Api_response::ok(array('user' => $this->getCurrentAdmin()));
     }
 
     // Two guards in one request, to see how often the token is looked up.
@@ -49,7 +49,7 @@ class AuthGuardHarness extends MY_Controller
 }
 
 // Pins how a request becomes a user and a permission: the Authorization
-// header, the token lookup, the role check. Every one of the ~45 admin
+// header, the token lookup. Every one of the ~45 admin
 // endpoints depends on this chain.
 class AuthChainTest extends TestCase
 {
@@ -74,33 +74,19 @@ class AuthChainTest extends TestCase
         }, $this->controller->Auth_Model->calls);
     }
 
-    private function user($role)
+    private function user()
     {
-        return array('id' => 3, 'email' => 'a@sdca.edu.ph', 'name' => 'Ana', 'role' => $role, 'password_hash' => 'x');
+        return array('id' => 3, 'email' => 'a@sdca.edu.ph', 'name' => 'Ana', 'password_hash' => 'x');
     }
 
-    // ---- roles -----------------------------------------------------
+    // ---- the guard -----------------------------------------------------
 
-    public function testAnAdminTokenPassesTheAdminGuard()
+    public function testAValidTokenPassesTheAdminGuard()
     {
-        $r = $this->request('Bearer goodtoken', 'adminOnly', $this->user('admin'));
+        $r = $this->request('Bearer goodtoken', 'adminOnly', $this->user());
 
         $this->assertSame(200, $r->status());
         $this->assertSame(array('goodtoken'), $this->lookups());
-    }
-
-    /** @dataProvider nonAdminRoles */
-    public function testAnyNonAdminRoleIsRefusedWith403($role)
-    {
-        $r = $this->request('Bearer goodtoken', 'adminOnly', $this->user($role));
-
-        $this->assertSame(403, $r->status());
-        $this->assertSame('Admin access required.', $r->body()['error']);
-    }
-
-    public function nonAdminRoles()
-    {
-        return array('user' => array('user'), 'pending' => array('pending'), 'unknown' => array('superadmin'), 'wrong case' => array('Admin'));
     }
 
     public function testATokenThatDoesNotValidateIsAnonymous()
@@ -123,9 +109,9 @@ class AuthChainTest extends TestCase
         return array('false' => array(false), 'null' => array(null), 'empty array' => array(array()));
     }
 
-    public function testTheUserRowTheLookupReturnedIsTheCurrentUser()
+    public function testTheRowTheLookupReturnedIsTheCurrentAdmin()
     {
-        $row = $this->user('user');
+        $row = $this->user();
 
         $r = $this->request('Bearer t', 'whoAmI', $row);
 
@@ -137,7 +123,7 @@ class AuthChainTest extends TestCase
     /** @dataProvider headersThatAreNotBearerTokens */
     public function testAHeaderThatIsNotABearerTokenIsAnonymousAndNeverLooksAnythingUp($header)
     {
-        $r = $this->request($header, 'adminOnly', $this->user('admin'));
+        $r = $this->request($header, 'adminOnly', $this->user());
 
         $this->assertSame(401, $r->status());
         $this->assertSame(array(), $this->lookups());
@@ -158,7 +144,7 @@ class AuthChainTest extends TestCase
     /** @dataProvider bearerHeaders */
     public function testTheTokenIsWhatFollowsTheSchemeTrimmed($header, $token)
     {
-        $this->request($header, 'adminOnly', $this->user('admin'));
+        $this->request($header, 'adminOnly', $this->user());
 
         $this->assertSame(array($token), $this->lookups());
     }
@@ -188,7 +174,7 @@ class AuthChainTest extends TestCase
 
     public function testTheTokenIsLookedUpOnceHoweverManyGuardsAsk()
     {
-        $this->request('Bearer t', 'twoGuards', $this->user('admin'));
+        $this->request('Bearer t', 'twoGuards', $this->user());
 
         $this->assertSame(array('t'), $this->lookups());
     }

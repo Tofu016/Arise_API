@@ -45,7 +45,7 @@ class AuthSessionTest extends TestCase
         $seen = array();
         $row = array('id' => 1, 'role' => 'admin');
 
-        $user = Auth_session::userFor('Bearer tok', function ($token) use (&$seen, $row) {
+        $user = Auth_session::adminFor('Bearer tok', function ($token) use (&$seen, $row) {
             $seen[] = $token;
             return $row;
         });
@@ -57,7 +57,7 @@ class AuthSessionTest extends TestCase
     /** @dataProvider refusals */
     public function testUserForIsNullWhenTheLookupRefusesTheToken($result)
     {
-        $this->assertNull(Auth_session::userFor('Bearer tok', function () use ($result) {
+        $this->assertNull(Auth_session::adminFor('Bearer tok', function () use ($result) {
             return $result;
         }));
     }
@@ -71,7 +71,7 @@ class AuthSessionTest extends TestCase
     {
         $called = false;
 
-        $user = Auth_session::userFor('Basic abc', function () use (&$called) {
+        $user = Auth_session::adminFor('Basic abc', function () use (&$called) {
             $called = true;
             return array('id' => 1);
         });
@@ -84,7 +84,7 @@ class AuthSessionTest extends TestCase
     {
         $seen = null;
 
-        Auth_session::userFor('Bearer  ', function ($token) use (&$seen) {
+        Auth_session::adminFor('Bearer  ', function ($token) use (&$seen) {
             $seen = $token;
             return false;
         });

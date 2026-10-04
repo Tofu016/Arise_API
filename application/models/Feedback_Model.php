@@ -128,9 +128,7 @@ class Feedback_Model extends CI_Model
         return $this->find($id);
     }
 
-    // Powers a badge/count in the admin panel — independent of whether
-    // the notification email itself ever actually sends, since that
-    // depends on SMTP being configured at all.
+    // Powers a badge/count in the admin panel.
     public function countUnreviewed()
     {
         return (int) $this->db->where('reviewed_at', null)->count_all_results($this->table);

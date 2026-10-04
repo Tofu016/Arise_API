@@ -1,13 +1,15 @@
 # First-run database setup
 
-`schema.sql` only creates empty tables. A fresh database has **no user
-accounts**, and the API never lets anyone give themselves the `admin`
-role — registration always creates `role = 'pending'`. So the very
-first admin has to be inserted by hand, directly in MySQL.
+`schema.sql` only creates empty tables. A fresh database has **no admin
+accounts**, and nothing in the app can create the first one: a registration
+is only `pending` until an admin approves it, and every admin-management
+endpoint needs a signed-in admin. So the very first admin is created from the command line, on the
+server, with a CodeIgniter CLI controller (`Admins_CLI`).
 
-(On this laptop's local DB there is already an admin:
-`cristopher.pondoc@sdca.edu.ph`. These steps are for a brand-new
-database — a new server, or a teammate's fresh clone.)
+Only admins exist. There are no other kinds of account.
+
+(On this laptop's local DB there are already admins. These steps are for
+a brand-new database: a new server, or a teammate's fresh clone.)
 
 ## 1. Create the database and load the schema
 
@@ -19,37 +21,51 @@ mysql -u root arise_web < schema.sql
 On XAMPP the client is `C:\xampp\mysql\bin\mysql`. Use the same
 DB name / credentials you put in `.env` (`DB_NAME`, `DB_USER`, `DB_PASS`).
 
-## 2. Create the first admin account
+## 2. Create the first admin
 
-`users.password_hash` holds a PHP `password_hash()` value (bcrypt,
-`PASSWORD_DEFAULT`) — the same thing `password_verify()` checks at
-login. Generate one:
+From the API's directory (where `index.php` lives):
 
 ```bash
-php -r "echo password_hash('YourStrongPasswordHere', PASSWORD_DEFAULT), PHP_EOL;"
+php index.php Admins_CLI create
 ```
 
-Paste the output (starts with `$2y$`) into this INSERT and run it
-against `arise_web`:
+It prompts for the email (must end in `@sdca.edu.ph`), the full name and
+a password of at least 8 characters, then creates the admin. For a
+scripted deploy, supply the values as environment variables instead and
+it will not prompt:
 
-```sql
--- Use a real @sdca.edu.ph address (the API's own registration flow
--- only accepts that domain; a manual INSERT isn't checked, but stay
--- consistent). created_at / updated_at have DB defaults and can be omitted.
-INSERT INTO users (email, password_hash, name, role)
-VALUES ('you@sdca.edu.ph', '<paste-hash-here>', 'Your Name', 'admin');
+```bash
+ADMIN_EMAIL=you@sdca.edu.ph ADMIN_NAME="Your Name" ADMIN_PASSWORD='...' php index.php Admins_CLI create
 ```
+
+They are not command-line arguments because CodeIgniter rejects `@` in
+the URI that CLI arguments become. Like `Cron_API`, the controller
+refuses to run over HTTP: shell access to the server is the credential.
 
 ## 3. Verify
 
-Log in through the front-end (or `POST /Auth_API/login`) with that
-email + password. You should get a bearer token back and be able to
-reach admin-only endpoints. From then on, new users register as
-`pending` and an admin approves/promotes them from inside the app.
+Log in through the front-end (or `POST /Auth_API/login`) with that email
+and password. You should get a bearer token back and be able to reach
+admin-only endpoints. From then on, admins add each other from the User
+Panel.
 
-## Promoting someone later, without the app
+## Lost password
 
-```sql
-UPDATE users SET role = 'admin' WHERE email = 'someone@sdca.edu.ph';
--- roles: 'pending' (just registered), 'user' (approved), 'admin'
+The sign-in page's "Forgot password?" emails a reset link. If email is not
+reaching the admin (PHP `mail()` often lands in spam, see `.env.example`), or
+no admin can sign in, set a password from the command line:
+
+```bash
+php index.php Admins_CLI setPassword
 ```
+
+(prompts for the email and the new password; `ADMIN_EMAIL` and
+`ADMIN_PASSWORD` work here too). It also ends that admin's active
+sessions.
+
+## Upgrading an existing database
+
+A database created before the users and email concepts were removed
+(it has `users`, `saved_rooms`, `password_resets`, `email_queue`) is
+brought up to date with `migrations/2026-10-04_admins_only_no_email.sql`.
+Back up first. It deletes every non-admin account and the dropped tables.

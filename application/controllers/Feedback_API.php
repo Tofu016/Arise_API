@@ -15,15 +15,35 @@ class Feedback_API extends MY_Controller
         $this->load->model('Feedback_Model');
     }
 
-    // POST /Feedback_API/submit — public, no auth required.
+    // POST /Feedback_API/submit — public, no auth required. Guarded against
+    // scripts three ways, in this order:
+    //   1. honeypot: the form carries a hidden hp_contact_url field no person
+    //      fills. A filled one gets a normal-looking success and nothing is
+    //      stored, so the script has no error to adapt to.
+    //   2. a per-visitor limit of one submission per 30 seconds, keyed on the
+    //      client's visitor_id (a UUID) when it sent one, else the IP.
+    //   3. a loose per-IP ceiling, for a script that rotates visitor ids.
+    // Only a submission that passes validation counts toward the limits.
     public function submit()
     {
         $data = $this->getInput();
+
+        if (Rate_limit::honeypotTripped($data)) {
+            return Api_response::ok(array('feedback' => array('id' => null, 'rating' => isset($data['rating']) ? (int) $data['rating'] : null)));
+        }
 
         $rating = isset($data['rating']) ? (int) $data['rating'] : 0;
         if ($rating < 1 || $rating > 5) {
             return Api_response::fail(400, 'Rating must be between 1 and 5.');
         }
+
+        $ip = Rate_limit::subject($this->clientIp());
+        $visitorId = Rate_limit::visitorId(isset($data['visitor_id']) ? $data['visitor_id'] : null);
+        $visitor = $visitorId !== null ? Rate_limit::subject($visitorId) : $ip;
+        $this->enforceRateLimit('feedback_ip', $ip, Rate_limit::FEEDBACK_IP_MAX, Rate_limit::FEEDBACK_IP_WINDOW, 'Too much feedback from this network. Try again in %d seconds.');
+        $this->enforceRateLimit('feedback_visitor', $visitor, 1, Rate_limit::FEEDBACK_VISITOR_WINDOW, 'Please wait %d seconds before sending more feedback.');
+        $this->recordRateHit('feedback_ip', $ip);
+        $this->recordRateHit('feedback_visitor', $visitor);
 
         $feedback = $this->Feedback_Model->create(array(
             'rating' => $rating,

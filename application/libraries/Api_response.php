@@ -30,9 +30,11 @@ class Api_response
         return new self(200, array('success' => true) + $data);
     }
 
-    public static function fail($status, $error)
+    // $extra adds machine-readable keys after "error" (e.g. retry_after on a
+    // 429); neither "success" nor "error" can be overridden.
+    public static function fail($status, $error, array $extra = array())
     {
-        return new self((int) $status, array('success' => false, 'error' => $error));
+        return new self((int) $status, array('success' => false, 'error' => $error) + $extra);
     }
 
     public function status()

@@ -1,24 +1,23 @@
 <?php
 // Pins two things Auth_API does with a user row and a header:
-//  - the user it sends back to the client is exactly id, email, name and
-//    role — never the password hash — from login, me and register;
+//  - the user it sends back to the client is exactly id, email and name — never the password hash — from login and me;
 //  - logout reads the bearer token from the header the same way the
 //    guards do.
 class AuthPayloadAndLogoutTest extends ActionTestCase
 {
     private function row()
     {
-        return array('id' => 5, 'email' => 'ana@sdca.edu.ph', 'name' => 'Ana', 'role' => 'pending', 'password_hash' => '$2y$secret', 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00');
+        return array('id' => 5, 'email' => 'ana@sdca.edu.ph', 'name' => 'Ana', 'status' => 'approved', 'password_hash' => '$2y$secret', 'created_at' => '2026-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00');
     }
 
     private function expectedPayload()
     {
-        return array('id' => 5, 'email' => 'ana@sdca.edu.ph', 'name' => 'Ana', 'role' => 'pending');
+        return array('id' => 5, 'email' => 'ana@sdca.edu.ph', 'name' => 'Ana');
     }
 
     // ---- the user sent to the client ------------------------------
 
-    public function testLoginSendsBackOnlyTheFourClientFields()
+    public function testLoginSendsBackOnlyTheThreeClientFields()
     {
         $r = $this->call('AuthApiHarness', 'login', array(), array('email' => 'ana@sdca.edu.ph', 'password' => 'x'), array(
             'Auth_Model' => array('verifyCredentials' => $this->row(), 'createToken' => 'tok'),
@@ -31,18 +30,7 @@ class AuthPayloadAndLogoutTest extends ActionTestCase
         $this->assertStringNotContainsString('password_hash', $r->json());
     }
 
-    public function testRegisterSendsBackOnlyTheFourClientFields()
-    {
-        $r = $this->call('AuthApiHarness', 'register', array(), array('email' => 'ana@sdca.edu.ph', 'password' => 'longenough', 'name' => 'Ana'), array(
-            'Auth_Model' => array('emailExists' => false, 'register' => $this->row(), 'createToken' => 'tok'),
-        ));
-
-        $this->assertReply($r, 200);
-        $this->assertSame($this->expectedPayload(), $r->body()['user']);
-        $this->assertStringNotContainsString('password_hash', $r->json());
-    }
-
-    public function testMeSendsBackOnlyTheFourClientFields()
+    public function testMeSendsBackOnlyTheThreeClientFields()
     {
         $r = $this->call('AuthApiHarness', 'me', array(), array(), array(), $this->row());
 

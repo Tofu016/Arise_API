@@ -13,15 +13,15 @@ The relative string that identifies a Photo everywhere, including in the databas
 _Avoid_: URL, filename, filepath
 
 **Category**:
-The first segment of a Photo path (`tourpanorama`, `panoramas`, `roomphoto`, …). It decides whether a Photo is public or protected.
+The first segment of a Photo path (`tourpanorama`, `panoramas`, `roomphoto`, `signage`, …). It decides whether a Photo is public or protected, and how it is laid out on disk.
 _Avoid_: Folder, subfolder, type
 
 **Public photo**:
-A Photo in a virtual-tour Category, viewable directly by anyone.
+A Photo in a virtual-tour or signage Category, served directly by Apache to anyone. (Signage may also be a video.)
 _Avoid_: Open photo
 
 **Protected photo**:
-A Photo in an indoor Category, kept where the web server cannot reach it and viewable only through the serve endpoint.
+A Photo in an indoor Category, kept where the web server cannot reach it and streamed only through the serve endpoint (which does not check who is asking: "protected" describes where the file lives, not who may view it).
 _Avoid_: Private photo, secure photo
 
 **Photo store**:
@@ -29,7 +29,7 @@ Where Photos are saved, found, read and removed, addressed only by Photo path.
 _Avoid_: Uploader, file manager, storage service
 
 **Photo column**:
-A database column that stores a Photo path. By convention its name contains "photo".
+A database column that stores a Photo path. By convention its name contains "photo", or "media" where it may also hold a video (`signage_slides.media_path`).
 _Avoid_: Image column, path column
 
 **In-use photo**:

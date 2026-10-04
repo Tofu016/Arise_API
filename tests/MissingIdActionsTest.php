@@ -9,7 +9,7 @@ class MissingIdActionsTest extends ActionTestCase
     {
         $params = $id === null ? array() : array($id);
 
-        $this->assertReply($this->call($harness, $action, $params, array('name' => 'x', 'label' => 'x', 'role' => 'user')), 400, $message);
+        $this->assertReply($this->call($harness, $action, $params, array('name' => 'x', 'label' => 'x')), 400, $message);
     }
 
     public function sites()
@@ -26,8 +26,8 @@ class MissingIdActionsTest extends ActionTestCase
             array('TourStopsApiHarness', 'deleteMarker', 'Missing marker id.'),
             array('BuildingsApiHarness', 'update', 'Missing building id.'),
             array('BuildingsApiHarness', 'delete', 'Missing building id.'),
-            array('UsersApiHarness', 'updateRole', 'Missing user id.'),
-            array('UsersApiHarness', 'delete', 'Missing user id.'),
+            array('AdminsApiHarness', 'approve', 'Missing admin id.'),
+            array('AdminsApiHarness', 'delete', 'Missing admin id.'),
             array('TourSectionsApiHarness', 'update', 'Missing section id.'),
             array('TourSectionsApiHarness', 'delete', 'Missing section id.'),
             array('PlacardDialogsApiHarness', 'update', 'Missing dialog id.'),
