@@ -37,7 +37,7 @@ class Feedback_API extends MY_Controller
 
     // GET /Feedback_API/getAll (admin only). Optional query filters (all
     // additive, see Feedback_Model::getAll): from, to, minRating, maxRating,
-    // hasComment. Paging: limit (1-100, omitted = every row), offset. sort:
+    // hasComment, reviewed. Paging: limit (1-100, omitted = every row), offset. sort:
     // unreviewed (default), newest, oldest, rating_desc, rating_asc. Returns
     // { feedback, total, unreviewedCount }, the counts covering every row
     // matching the filters, not just this page.
@@ -53,14 +53,15 @@ class Feedback_API extends MY_Controller
 
     // GET /Feedback_API/ratingCounts (admin only). Same from/to/minRating/
     // maxRating filters as getAll, minus hasComment (see
-    // Feedback_Model::ratingCounts). Returns { counts: { "1": n, ..., "5": n } }.
+    // Feedback_Model::ratingCounts); reviewed applies too if sent, though the
+    // dashboard never sends it here. Returns { counts: { "1": n, ..., "5": n } }.
     public function ratingCounts()
     {
         $this->requireAdmin();
         return Api_response::ok(array('counts' => $this->Feedback_Model->ratingCounts($this->filtersFromQuery())));
     }
 
-    // The from/to/minRating/maxRating filters getAll and ratingCounts share.
+    // The filters getAll and ratingCounts share.
     private function filtersFromQuery()
     {
         return array(
@@ -69,6 +70,7 @@ class Feedback_API extends MY_Controller
             'minRating' => $this->input->get('minRating'),
             'maxRating' => $this->input->get('maxRating'),
             'hasComment' => $this->input->get('hasComment'),
+            'reviewed' => $this->input->get('reviewed'),
         );
     }
 
@@ -76,7 +78,24 @@ class Feedback_API extends MY_Controller
     public function markReviewed($id)
     {
         $this->requireAdmin();
-        return Api_response::ok(array('feedback' => $this->Feedback_Model->markReviewed($id)));
+        return $this->respondReviewed($id, true);
+    }
+
+    // PATCH /Feedback_API/markUnreviewed/{id}, admin only. Clears
+    // reviewed_at, putting the row back in the unreviewed count.
+    public function markUnreviewed($id)
+    {
+        $this->requireAdmin();
+        return $this->respondReviewed($id, false);
+    }
+
+    private function respondReviewed($id, $reviewed)
+    {
+        $feedback = $this->Feedback_Model->setReviewed($id, $reviewed);
+        if (!$feedback) {
+            return Api_response::fail(404, 'Feedback not found.');
+        }
+        return Api_response::ok(array('feedback' => $feedback));
     }
 
     // GET /Feedback_API/unreadCount — admin only.

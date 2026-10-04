@@ -40,7 +40,8 @@ class Feedback_Model extends CI_Model
     );
 
     // $filters is optional, all additive: from/to (date, inclusive),
-    // minRating/maxRating (a rating range, both inclusive), hasComment (bool).
+    // minRating/maxRating (a rating range, both inclusive), hasComment (bool),
+    // reviewed (bool: '1' reviewed only, '0' unreviewed only).
     private function applyFilters($filters)
     {
         if (!empty($filters['from'])) {
@@ -62,6 +63,9 @@ class Feedback_Model extends CI_Model
                 $this->db->group_start()->where('comment', null)->or_where('comment', '')->group_end();
             }
         }
+        if (isset($filters['reviewed']) && $filters['reviewed'] !== '' && $filters['reviewed'] !== null) {
+            $this->db->where($filters['reviewed'] ? 'reviewed_at IS NOT NULL' : 'reviewed_at IS NULL', null, false);
+        }
     }
 
     // One page of feedback plus the totals the Comments section needs to
@@ -73,7 +77,9 @@ class Feedback_Model extends CI_Model
         $this->applyFilters($filters);
         $total = $this->db->count_all_results($this->table);
 
-        $this->applyFilters($filters);
+        // Ignores the reviewed filter: the "N new" badge counts what's still
+        // waiting in this range even while the list shows only reviewed rows.
+        $this->applyFilters(array_merge($filters, array('reviewed' => null)));
         $this->db->where('reviewed_at IS NULL', null, false);
         $unreviewed = $this->db->count_all_results($this->table);
 
@@ -112,10 +118,12 @@ class Feedback_Model extends CI_Model
         return $counts;
     }
 
-    public function markReviewed($id)
+    // Marks a row reviewed (now) or back to unreviewed (NULL), so an admin
+    // can undo a misclick or flag something to come back to.
+    public function setReviewed($id, $reviewed)
     {
         $this->db->where('id', $id)->update($this->table, array(
-            'reviewed_at' => date('Y-m-d H:i:s'),
+            'reviewed_at' => $reviewed ? date('Y-m-d H:i:s') : null,
         ));
         return $this->find($id);
     }

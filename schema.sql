@@ -224,6 +224,7 @@ CREATE TABLE `placard_dialogs` (
   `photo_path` varchar(500) DEFAULT NULL,
   `photo_360_path` varchar(500) DEFAULT NULL,
   `link` varchar(500) DEFAULT NULL,
+  `contact_number` varchar(50) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),

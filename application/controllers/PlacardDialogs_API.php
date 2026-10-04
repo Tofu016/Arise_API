@@ -39,7 +39,7 @@ class PlacardDialogs_API extends MY_Controller
             return Api_response::fail(409, 'A room with this name already exists.');
         }
 
-        $allowed = array('description', 'department', 'use', 'photo_path', 'photo_360_path', 'link');
+        $allowed = array('description', 'department', 'contact_number', 'photo_path', 'photo_360_path', 'link');
         $fields = array_intersect_key($data, array_flip($allowed));
         $searchTerms = (isset($data['search_terms']) && is_array($data['search_terms'])) ? $data['search_terms'] : array();
 
@@ -66,7 +66,7 @@ class PlacardDialogs_API extends MY_Controller
             }
         }
 
-        $allowed = array('room_name', 'description', 'department', 'use', 'photo_path', 'photo_360_path', 'link');
+        $allowed = array('room_name', 'description', 'department', 'contact_number', 'photo_path', 'photo_360_path', 'link');
         $searchTerms = (isset($data['search_terms']) && is_array($data['search_terms'])) ? $data['search_terms'] : null;
         // A body carrying only search_terms is still a change.
         $patch = Api_input::patch($data, $allowed, $searchTerms !== null);

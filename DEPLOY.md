@@ -228,8 +228,8 @@ Panoramas are 5–30 MB; PHP's defaults reject them. In the active
 `/etc/php/8.1/apache2/php.ini`):
 
 ```ini
-upload_max_filesize = 64M
-post_max_size       = 72M
+upload_max_filesize = 100M
+post_max_size       = 128M
 memory_limit        = 256M
 max_execution_time  = 120
 max_input_time      = 120
@@ -611,6 +611,23 @@ database that got an earlier draft of these tables, with whole-second
 ```bash
 mysql -u arise -p arise_web -e "ALTER TABLE signage_slides MODIFY duration_seconds decimal(4,1) NOT NULL DEFAULT 10.0; ALTER TABLE signage_settings MODIFY default_duration_seconds decimal(4,1) NOT NULL DEFAULT 10.0"
 ```
+
+**Room contact number replaces Use**: adds `contact_number` to `placard_dialogs`.
+The Room Editor's "Use" field is gone and `PlacardDialogs_API` no longer
+accepts `use`; the `use` column is left in place (unread, unwritten) so
+this stays additive and a rollback keeps its old values:
+
+```sql
+ALTER TABLE placard_dialogs
+  ADD COLUMN contact_number varchar(50) DEFAULT NULL AFTER link;
+```
+
+```bash
+mysql -u arise -p arise_web -e "ALTER TABLE placard_dialogs ADD COLUMN contact_number varchar(50) DEFAULT NULL AFTER link"
+```
+
+Until it is applied, saving a room in the Room Editor fails (unknown column
+`contact_number`), so apply it first.
 
 ---
 
