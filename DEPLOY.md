@@ -646,16 +646,20 @@ mysqldump -u arise -p arise_web > backup-before-rename.sql
 mysql -u arise -p arise_web < migrations/2026-10-05_rename_type_ids.sql
 ```
 
-**Safe point flag for emergency routing** (additive): adds `discharges_outside` to `nodes`,
-the admin's confirmation that an Entrance or Fire Exit node leads outside at ground level.
-"Nearest Exit" only routes to nodes flagged this way (plus Open Area and Parking nodes);
-a building with no flagged node falls back to its Entrance nodes and the visitor is told
-the exits have not been confirmed. Apply it before deploying the web code that saves the
-field, then flag each building's real exits in the node editor:
+**Emergency Exit Destination Point flag** (additive): adds `is_emergency_destination` to
+`nodes`, the admin's statement that someone who reaches that node is out of danger. "Nearest
+Exit" ends its route at ticked nodes only: nothing is automatic, so every Open Area, Parking,
+Lobby, Entrance and Fire Exit node starts unticked and a building with none ticked gets no
+route. The web app limits the tick to those five types and to Floor 1 or Underground. Apply
+both migrations, in order, before deploying the web code that saves the field (a database
+that already has the older `discharges_outside` column only needs the second):
 
 ```bash
 mysql -u arise -p arise_web < migrations/2026-10-06_node_discharges_outside.sql
+mysql -u arise -p arise_web < migrations/2026-10-07_rename_discharges_outside.sql
 ```
+
+Then tick each building's real exits in the node editor.
 
 **Virtual Tour markers removed** — the Virtual Tour no longer has markers or
 marker photos. Drop the two tables (check they are empty first; any photos

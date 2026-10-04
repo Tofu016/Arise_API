@@ -111,7 +111,7 @@ class Nodes_API extends MY_Controller
             'name', 'building', 'floor', 'type', 'photo_path',
             'leads_to_floors', 'flowchart_position_x', 'flowchart_position_y', 'is_starting_node',
             'starting_view_yaw', 'starting_view_pitch', 'is_campus_entrance', 'is_building_entrance',
-            'discharges_outside',
+            'is_emergency_destination',
         );
         $patch = Api_input::patch($data, $allowed);
 

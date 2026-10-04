@@ -206,7 +206,7 @@ CREATE TABLE `nodes` (
   `starting_view_pitch` float DEFAULT NULL,
   `is_campus_entrance` tinyint(1) NOT NULL DEFAULT 0,
   `is_building_entrance` tinyint(1) NOT NULL DEFAULT 0,
-  `discharges_outside` tinyint(1) NOT NULL DEFAULT 0,
+  `is_emergency_destination` tinyint(1) NOT NULL DEFAULT 0,
   `photo_path` varchar(500) DEFAULT NULL,
   `flowchart_position_x` float DEFAULT NULL,
   `flowchart_position_y` float DEFAULT NULL,
