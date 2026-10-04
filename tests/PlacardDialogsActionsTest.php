@@ -18,7 +18,7 @@ class PlacardDialogsActionsTest extends ActionTestCase
     {
         $noId = 'Missing dialog id.';
         $noFields = 'No valid fields to update.';
-        $taken = 'A room with this name already exists.';
+        $taken = 'A room or facility with this name already exists.';
 
         return array(
             'create: empty body' => array('create', array(), array(), $this->nameTaken(false), 400, 'room_name is required.'),

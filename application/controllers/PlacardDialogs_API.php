@@ -1,9 +1,13 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-// Same conventions throughout — getAll() public (room details are
-// shown to any visitor tapping a room in the navigator, not just
-// admins), writes behind requireAdmin(). room_name's uniqueness is
+// Same conventions throughout — getAll() public (room and facility details
+// are shown to any visitor tapping a room or facility in the navigator, not
+// just admins), writes behind requireAdmin(). A dialog belongs to a room (a
+// node's "Rooms served" entry) or a facility (a facility marker's label);
+// both are keyed by name in room_name, so the name is unique across the
+// two. The field keeps its room_name name because the mobile app reads it.
+// room_name's uniqueness is
 // checked explicitly before insert/update, same reasoning as the
 // building-existence and marker-type checks built for nodes.
 class PlacardDialogs_API extends MY_Controller
@@ -36,7 +40,7 @@ class PlacardDialogs_API extends MY_Controller
         }
 
         if ($this->PlacardDialogs_Model->roomNameExists($roomName)) {
-            return Api_response::fail(409, 'A room with this name already exists.');
+            return Api_response::fail(409, 'A room or facility with this name already exists.');
         }
 
         $allowed = array('description', 'department', 'contact_number', 'photo_path', 'photo_360_path', 'link');
@@ -62,7 +66,7 @@ class PlacardDialogs_API extends MY_Controller
                 return Api_response::fail(400, 'room_name cannot be blank.');
             }
             if ($this->PlacardDialogs_Model->roomNameExists($newName, $id)) {
-                return Api_response::fail(409, 'A room with this name already exists.');
+                return Api_response::fail(409, 'A room or facility with this name already exists.');
             }
         }
 

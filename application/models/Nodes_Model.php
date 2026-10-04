@@ -378,6 +378,18 @@ class Nodes_Model extends CI_Model
 
     // ---------- Rooms served (loose name references) ----------
 
+    // The node already holding this room name, or null. Trim and
+    // case-insensitive, matching checkDuplicateRooms on the frontend, so
+    // "203" and " 203 " are the same room. Search needs one answer per name.
+    public function findRoomOwner($roomName)
+    {
+        $this->db->select('node_id');
+        $this->db->from('node_rooms');
+        $this->db->where('LOWER(TRIM(room_name)) =', strtolower(trim($roomName)));
+        $row = $this->db->get()->row_array();
+        return $row ? $row['node_id'] : null;
+    }
+
     public function addRoom($nodeId, $roomName)
     {
         $this->db->insert('node_rooms', array(

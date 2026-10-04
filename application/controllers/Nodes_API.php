@@ -383,6 +383,11 @@ class Nodes_API extends MY_Controller
             return Api_response::fail(400, 'node_id and room_name are both required.');
         }
 
+        $owner = $this->Nodes_Model->findRoomOwner($roomName);
+        if ($owner !== null) {
+            return Api_response::fail(409, "Room '" . trim($roomName) . "' is already assigned to node '{$owner}'.");
+        }
+
         $roomRowId = $this->Nodes_Model->addRoom($nodeId, $roomName);
         return Api_response::ok(array('room_id' => $roomRowId));
     }
