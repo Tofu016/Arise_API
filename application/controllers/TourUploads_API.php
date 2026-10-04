@@ -2,7 +2,7 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 // Handles uploads for genuinely public Virtual Tour content — panoramas,
-// section covers, marker photos. Uploads themselves still require admin
+// section covers. Uploads themselves still require admin
 // auth (extends MY_Controller, calls requireAdmin()) even though the
 // resulting files are freely, directly viewable afterward — anyone can
 // look at a tour photo, but only an admin can add one.
@@ -11,8 +11,8 @@ defined('BASEPATH') or exit('No direct script access allowed');
 // Photo_store.php) under the public root, which Apache serves as plain
 // static files — no PHP involvement needed just to view them, matching
 // the original Firebase behavior where these specific paths were the
-// ones marked publicly readable in storage.rules. Same three path
-// prefixes as before (tourpanorama/, tourcover/, tourmarker/) preserved
+// ones marked publicly readable in storage.rules. Same two path
+// prefixes as before (tourpanorama/, tourcover/) preserved
 // deliberately — useSecurePhotoUrl.js's own rewrite recognizes these
 // exact prefixes to decide "resolve this as a direct public URL" versus
 // "fall back to the old Firebase logic for anything not migrated yet."
@@ -33,12 +33,5 @@ class TourUploads_API extends MY_Controller
     {
         $this->requireAdmin();
         return $this->savePhoto('tourcover');
-    }
-
-    // POST /TourUploads_API/marker — admin only.
-    public function marker()
-    {
-        $this->requireAdmin();
-        return $this->savePhoto('tourmarker');
     }
 }

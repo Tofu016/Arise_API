@@ -5,11 +5,10 @@ require_once APPPATH . 'libraries/Neighbor_links.php';
 
 // Mirrors useGraphCollection.js's tourStops behavior — same slug-based
 // id generation as TourSections_Model, plus the bidirectional
-// neighbor-link and marker/photo management that tour_sections never
-// needed. Reads assemble the nested shape (a stop with its neighbors
-// and markers-with-photos) from four separate, batched queries rather
-// than one query per stop — avoids an N+1 query problem as the number
-// of stops grows.
+// neighbor-link management that tour_sections never
+// needed. Reads assemble the nested shape (a stop with its neighbors)
+// from batched queries rather than one query per stop — avoids an N+1
+// query problem as the number of stops grows.
 class TourStops_Model extends CI_Model
 {
     private $table = 'tour_stops';
@@ -26,12 +25,10 @@ class TourStops_Model extends CI_Model
     {
         $stops = $this->_getStopRows();
         $neighborsByStop = $this->_getNeighborsGrouped();
-        $markersByStop = $this->_getMarkersGrouped();
 
         foreach ($stops as &$stop) {
             $stopId = $stop['id'];
             $stop['neighbors'] = isset($neighborsByStop[$stopId]) ? $neighborsByStop[$stopId] : array();
-            $stop['markers'] = isset($markersByStop[$stopId]) ? $markersByStop[$stopId] : array();
         }
         unset($stop);
 
@@ -49,9 +46,7 @@ class TourStops_Model extends CI_Model
         }
 
         $neighborsByStop = $this->_getNeighborsGrouped($id);
-        $markersByStop = $this->_getMarkersGrouped($id);
         $row['neighbors'] = isset($neighborsByStop[$id]) ? $neighborsByStop[$id] : array();
-        $row['markers'] = isset($markersByStop[$id]) ? $markersByStop[$id] : array();
 
         return $row;
     }
@@ -76,53 +71,6 @@ class TourStops_Model extends CI_Model
     private function _getNeighborsGrouped($onlyStopId = null)
     {
         return $this->neighborLinks()->groupedByOwner($onlyStopId);
-    }
-
-    private function _getMarkersGrouped($onlyStopId = null)
-    {
-        $this->db->select('*');
-        $this->db->from('tour_stop_markers');
-        if ($onlyStopId !== null) {
-            $this->db->where('tour_stop_id', $onlyStopId);
-        }
-        $markerRows = $this->db->get()->result_array();
-
-        if (empty($markerRows)) {
-            return array();
-        }
-
-        $markerIds = array();
-        foreach ($markerRows as $m) {
-            $markerIds[] = $m['id'];
-        }
-
-        $this->db->select('*');
-        $this->db->from('tour_stop_marker_photos');
-        $this->db->where_in('marker_id', $markerIds);
-        $this->db->order_by('sort_order', 'ASC');
-        $photoRows = $this->db->get()->result_array();
-
-        $photosByMarker = array();
-        foreach ($photoRows as $p) {
-            $photosByMarker[$p['marker_id']][] = array(
-                'id' => $p['id'],
-                'photo_path' => $p['photo_path'],
-                'sort_order' => $p['sort_order'],
-            );
-        }
-
-        $grouped = array();
-        foreach ($markerRows as $m) {
-            $grouped[$m['tour_stop_id']][] = array(
-                'id' => $m['id'],
-                'type' => $m['type'],
-                'label' => $m['label'],
-                'yaw' => $m['yaw'],
-                'pitch' => $m['pitch'],
-                'photos' => isset($photosByMarker[$m['id']]) ? $photosByMarker[$m['id']] : array(),
-            );
-        }
-        return $grouped;
     }
 
     // ---------- Stop CRUD ----------
@@ -200,8 +148,8 @@ class TourStops_Model extends CI_Model
         return $this->find($id);
     }
 
-    // Safe only because the schema's own foreign keys (tour_stop_neighbors,
-    // tour_stop_markers) now specify ON UPDATE CASCADE — MySQL rewrites
+    // Safe only because the schema's own foreign key (tour_stop_neighbors)
+    // now specifies ON UPDATE CASCADE — MySQL rewrites
     // every referencing row automatically. Firestore's version had to do
     // this by hand (write new doc, delete old, fix up every other item's
     // neighbor list, all as one batch) purely because Firestore has no
@@ -226,9 +174,8 @@ class TourStops_Model extends CI_Model
 
     public function delete($id)
     {
-        // Neighbors, markers, and marker photos all cascade-delete via
-        // the schema's own foreign keys — nothing extra to clean up
-        // here manually.
+        // Neighbors cascade-delete via the schema's own foreign key —
+        // nothing extra to clean up here manually.
         $this->db->where('id', $id);
         return $this->db->delete($this->table);
     }
@@ -260,65 +207,5 @@ class TourStops_Model extends CI_Model
     public function updateNeighborDefaultView($stopId, $neighborId, $yaw, $pitch)
     {
         return $this->neighborLinks()->setDefaultView($stopId, $neighborId, $yaw, $pitch);
-    }
-
-    // ---------- Equipment markers ----------
-
-    // $photoPaths is a plain array of paths — sort_order is assigned
-    // here from the array's own order, since that's the carousel order
-    // the admin actually set when uploading, and a relational table
-    // needs that made explicit (Firestore's array index did this
-    // implicitly).
-    public function addMarker($stopId, $label, $yaw, $pitch, $photoPaths = array())
-    {
-        $this->db->insert('tour_stop_markers', array(
-            'tour_stop_id' => $stopId,
-            'type' => 'equipment',
-            'label' => $label,
-            'yaw' => $yaw,
-            'pitch' => $pitch,
-        ));
-        $markerId = $this->db->insert_id();
-
-        $this->_insertMarkerPhotos($markerId, $photoPaths);
-
-        return $markerId;
-    }
-
-    public function updateMarker($markerId, $data, $photoPaths = null)
-    {
-        if (!empty($data)) {
-            $this->db->where('id', $markerId);
-            $this->db->update('tour_stop_markers', $data);
-        }
-
-        // Only touches photos if a new set was actually provided —
-        // null specifically means "leave the photos alone", distinct
-        // from an empty array, which means "clear them all".
-        if ($photoPaths !== null) {
-            $this->db->where('marker_id', $markerId);
-            $this->db->delete('tour_stop_marker_photos');
-            $this->_insertMarkerPhotos($markerId, $photoPaths);
-        }
-    }
-
-    public function deleteMarker($markerId)
-    {
-        // tour_stop_marker_photos cascades via its own foreign key.
-        $this->db->where('id', $markerId);
-        return $this->db->delete('tour_stop_markers');
-    }
-
-    private function _insertMarkerPhotos($markerId, $photoPaths)
-    {
-        $sortOrder = 0;
-        foreach ($photoPaths as $path) {
-            $this->db->insert('tour_stop_marker_photos', array(
-                'marker_id' => $markerId,
-                'photo_path' => $path,
-                'sort_order' => $sortOrder,
-            ));
-            $sortOrder++;
-        }
     }
 }

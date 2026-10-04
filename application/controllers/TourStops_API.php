@@ -6,9 +6,8 @@ require_once APPPATH . 'libraries/Neighbor_actions.php';
 // Same conventions as TourSections_API — extends MY_Controller,
 // getAll() genuinely public (matching the original confirmed
 // tourStops Firestore rule: allow read: if true), every write behind
-// requireAdmin(). The extra endpoints here (neighbors, markers) exist
-// because tour_stops has real graph/marker structure that
-// tour_sections never needed.
+// requireAdmin(). The extra endpoints here (neighbors) exist because
+// tour_stops has real graph structure that tour_sections never needed.
 class TourStops_API extends MY_Controller
 {
     use Neighbor_actions;
@@ -139,58 +138,5 @@ class TourStops_API extends MY_Controller
     protected function neighborModel()
     {
         return $this->TourStops_Model;
-    }
-
-    // POST /TourStops_API/addMarker — admin only.
-    // Body: stop_id, label, yaw, pitch, photos (array of paths, optional)
-    public function addMarker()
-    {
-        $this->requireAdmin();
-
-        $data = $this->getInput();
-        Api_input::requirePresent($data, array('stop_id', 'label', 'yaw', 'pitch'));
-
-        $photos = isset($data['photos']) && is_array($data['photos']) ? $data['photos'] : array();
-        $markerId = $this->TourStops_Model->addMarker(
-            $data['stop_id'],
-            $data['label'],
-            $data['yaw'],
-            $data['pitch'],
-            $photos
-        );
-
-        return Api_response::ok(array('marker_id' => $markerId));
-    }
-
-    // PATCH /TourStops_API/updateMarker/{marker_id} — admin only.
-    // Body: label/yaw/pitch (any subset), photos (optional — omit
-    // entirely to leave photos untouched, include an empty array to
-    // clear them, or a new full list to replace them).
-    public function updateMarker($markerId = null)
-    {
-        $this->requireAdmin();
-
-        Api_input::requireId($markerId, 'marker');
-
-        $data = $this->getInput();
-        $allowed = array('label', 'yaw', 'pitch');
-        $photos = (isset($data['photos']) && is_array($data['photos'])) ? $data['photos'] : null;
-        // A body carrying only a photo list (even an empty one, which
-        // clears them) is still a change.
-        $patch = Api_input::patch($data, $allowed, $photos !== null);
-
-        $this->TourStops_Model->updateMarker($markerId, $patch, $photos);
-        return Api_response::ok();
-    }
-
-    // DELETE /TourStops_API/deleteMarker/{marker_id} — admin only.
-    public function deleteMarker($markerId = null)
-    {
-        $this->requireAdmin();
-
-        Api_input::requireId($markerId, 'marker');
-
-        $this->TourStops_Model->deleteMarker($markerId);
-        return Api_response::ok();
     }
 }

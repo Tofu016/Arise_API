@@ -1,6 +1,5 @@
 <?php
-// Pins TourStops_API's guards, including the two update rules that a body
-// with only `photos` is a valid marker change, and that an empty-string
+// Pins TourStops_API's guards, including the rule that an empty-string
 // section_id is stored as NULL.
 class TourStopsActionsTest extends ActionTestCase
 {
@@ -20,7 +19,6 @@ class TourStopsActionsTest extends ActionTestCase
         $noFields = 'No valid fields to update.';
         $bothIds = 'Both the current and new id are required.';
         $neighbor = array('stop_id' => 'a', 'neighbor_id' => 'b', 'yaw' => 1, 'pitch' => 2, 'reverse_yaw' => 3, 'reverse_pitch' => 4);
-        $marker = array('stop_id' => 'a', 'label' => 'L', 'yaw' => 1, 'pitch' => 2);
 
         return array(
             'create: empty body' => array('create', array(), array(), $this->stops(), 400, 'Stop name is required.'),
@@ -66,21 +64,8 @@ class TourStopsActionsTest extends ActionTestCase
             'clearNeighborDefaultView: empty body' => array('clearNeighborDefaultView', array(), array(), $this->stops(), 400, 'stop_id and neighbor_id are both required.'),
             'clearNeighborDefaultView: valid' => array('clearNeighborDefaultView', array(), array('stop_id' => 'a', 'neighbor_id' => 'b'), $this->stops(), 200, null),
 
-            'addMarker: no stop_id' => array('addMarker', array(), array_diff_key($marker, array('stop_id' => 1)), $this->stops(), 400, 'Missing field: stop_id'),
-            'addMarker: no label' => array('addMarker', array(), array_diff_key($marker, array('label' => 1)), $this->stops(), 400, 'Missing field: label'),
-            'addMarker: valid' => array('addMarker', array(), $marker, $this->stops(), 200, null),
-            'addMarker: valid with photos' => array('addMarker', array(), array_merge($marker, array('photos' => array('tourmarker/a.jpg'))), $this->stops(), 200, null),
 
-            'updateMarker: no id' => array('updateMarker', array(), array('label' => 'x'), $this->stops(), 400, 'Missing marker id.'),
-            'updateMarker: empty body' => array('updateMarker', array('7'), array(), $this->stops(), 400, $noFields),
-            'updateMarker: only unknown fields' => array('updateMarker', array('7'), array('bogus' => 1), $this->stops(), 400, $noFields),
-            'updateMarker: photos that are not a list are no change' => array('updateMarker', array('7'), array('photos' => 'x'), $this->stops(), 400, $noFields),
-            'updateMarker: valid field' => array('updateMarker', array('7'), array('label' => 'x'), $this->stops(), 200, null),
-            'updateMarker: photos alone is a change' => array('updateMarker', array('7'), array('photos' => array('tourmarker/a.jpg')), $this->stops(), 200, null),
-            'updateMarker: an empty photos list clears them' => array('updateMarker', array('7'), array('photos' => array()), $this->stops(), 200, null),
 
-            'deleteMarker: no id' => array('deleteMarker', array(), array(), $this->stops(), 400, 'Missing marker id.'),
-            'deleteMarker: valid' => array('deleteMarker', array('7'), array(), $this->stops(), 200, null),
         );
     }
 
@@ -96,12 +81,5 @@ class TourStopsActionsTest extends ActionTestCase
         $this->call('TourStopsApiHarness', 'update', array('a'), array('name' => 'X', 'id' => 'hijack', 'bogus' => 1));
 
         $this->assertSame(array('name' => 'X'), $this->controller->TourStops_Model->calls[0][1][1]);
-    }
-
-    public function testUpdateMarkerHandsTheModelThePatchAndThePhotoList()
-    {
-        $this->call('TourStopsApiHarness', 'updateMarker', array('7'), array('label' => 'x', 'bogus' => 1, 'photos' => array('p.jpg')));
-
-        $this->assertSame(array('7', array('label' => 'x'), array('p.jpg')), $this->controller->TourStops_Model->calls[0][1]);
     }
 }

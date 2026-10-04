@@ -30,7 +30,6 @@ class Photo_store
     const CATEGORIES = array(
         'tourpanorama' => array('visibility' => 'public', 'layout' => 'flat', 'listed' => true),
         'tourcover' => array('visibility' => 'public', 'layout' => 'flat', 'listed' => true),
-        'tourmarker' => array('visibility' => 'public', 'layout' => 'flat', 'listed' => true),
         'panoramas' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => true),
         'roomphoto' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => true),
         'room360' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => true),

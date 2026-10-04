@@ -9,18 +9,18 @@ require_once APPPATH . 'models/Elevators_Model.php';
 // as TourStops_Model, plus:
 //  - a REQUIRED (not optional) foreign key into buildings
 //  - node_markers.type is a real ENUM in the schema (room/facility/
-//    exit/hydrant), unlike tour_stop_markers' free-form varchar — an
+//    emergency_exit/fire_extinguisher/elevator) — an
 //    invalid value here would otherwise surface as a raw MySQL error,
 //    so it's validated explicitly before ever reaching the database
 //  - node_rooms: a separate, simple one-to-many list of room names —
 //    a loose, name-based reference (no FK to placard_dialogs), matching
 //    the original: a node can list a room name before that room's own
 //    details even exist yet
-//  - markers here have no photos at all, unlike tour_stop_markers
+//  - markers here have no photos at all
 class Nodes_Model extends CI_Model
 {
     private $table = 'nodes';
-    private $allowedMarkerTypes = array('room', 'facility', 'exit', 'hydrant', 'elevator');
+    private $allowedMarkerTypes = array('room', 'facility', 'emergency_exit', 'fire_extinguisher', 'elevator');
 
     // GD1/GD2/GD3 are separate buildings but one physical campus (see
     // buildingStore.js's own HARDCODED_IDS on the frontend for the same
@@ -330,7 +330,7 @@ class Nodes_Model extends CI_Model
         return $this->neighborLinks()->setDefaultView($nodeId, $neighborId, $yaw, $pitch);
     }
 
-    // ---------- Markers (room / facility / exit / hydrant / elevator — no photos) ----------
+    // ---------- Markers (room / facility / emergency_exit / fire_extinguisher / elevator — no photos) ----------
 
     public function isValidMarkerType($type)
     {

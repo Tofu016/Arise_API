@@ -89,9 +89,9 @@ class PhotoStoreTest extends TestCase
 
     public function testFallsBackToTheUploadedFilesOwnNameWhenNoNameIsGiven()
     {
-        $r = $this->store->save('tourmarker', $this->png('from-client.png'));
+        $r = $this->store->save('tourcover', $this->png('from-client.png'));
 
-        $this->assertSame('tourmarker/from-client.png', $r['path']);
+        $this->assertSame('tourcover/from-client.png', $r['path']);
     }
 
     public function testSavedExtensionComesFromTheVerifiedImageNotTheClientName()

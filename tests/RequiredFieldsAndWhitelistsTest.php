@@ -43,7 +43,6 @@ class RequiredFieldsAndWhitelistsTest extends ActionTestCase
             array('TourStopsApiHarness', 'addNeighbor', array('stop_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch')),
             array('TourStopsApiHarness', 'updateNeighborAngle', array('stop_id', 'neighbor_id', 'yaw', 'pitch')),
             array('TourStopsApiHarness', 'updateNeighborDefaultView', array('stop_id', 'neighbor_id', 'default_yaw', 'default_pitch')),
-            array('TourStopsApiHarness', 'addMarker', array('stop_id', 'label', 'yaw', 'pitch')),
         );
 
         $cases = array();
@@ -89,11 +88,10 @@ class RequiredFieldsAndWhitelistsTest extends ActionTestCase
                 'name' => 'x', 'building' => 'gd1', 'floor' => 2, 'type' => 'hallway', 'photo_path' => 'panoramas/gd1/a.jpg',
                 'leads_to_floors' => array(1, 3), 'flowchart_position_x' => 1, 'flowchart_position_y' => 2, 'is_starting_node' => 1,
                 'starting_view_yaw' => 10, 'starting_view_pitch' => -5, 'is_campus_entrance' => 1,
-                'is_building_entrance' => 1,
+                'is_building_entrance' => 1, 'discharges_outside' => 1,
             )),
             array('NodesApiHarness', 'updateMarker', array('7'), array('type' => 'room', 'label' => 'x', 'yaw' => 1, 'pitch' => 2)),
             array('TourStopsApiHarness', 'update', array('a'), array('name' => 'x', 'section_id' => '1', 'photo_path' => 'tourpanorama/a.jpg', 'description' => 'd')),
-            array('TourStopsApiHarness', 'updateMarker', array('7'), array('label' => 'x', 'yaw' => 1, 'pitch' => 2)),
             array('PlacardDialogsApiHarness', 'update', array('1'), array(
                 'room_name' => 'x', 'description' => 'd', 'department' => 'd', 'contact_number' => '(02) 8123-4567',
                 'photo_path' => 'roomphoto/gd1/a.jpg', 'photo_360_path' => 'room360/gd1/a.webp', 'link' => 'l',

@@ -22,8 +22,6 @@ class MissingIdActionsTest extends ActionTestCase
             array('NodesApiHarness', 'removeRoom', 'Missing room id.'),
             array('TourStopsApiHarness', 'update', 'Missing stop id.'),
             array('TourStopsApiHarness', 'delete', 'Missing stop id.'),
-            array('TourStopsApiHarness', 'updateMarker', 'Missing marker id.'),
-            array('TourStopsApiHarness', 'deleteMarker', 'Missing marker id.'),
             array('BuildingsApiHarness', 'update', 'Missing building id.'),
             array('BuildingsApiHarness', 'delete', 'Missing building id.'),
             array('AdminsApiHarness', 'approve', 'Missing admin id.'),

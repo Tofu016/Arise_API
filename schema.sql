@@ -149,7 +149,7 @@ DROP TABLE IF EXISTS `node_markers`;
 CREATE TABLE `node_markers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `node_id` varchar(64) NOT NULL,
-  `type` enum('room','facility','exit','hydrant','elevator') NOT NULL,
+  `type` enum('room','facility','emergency_exit','fire_extinguisher','elevator') NOT NULL,
   `label` varchar(255) NOT NULL,
   `yaw` float NOT NULL,
   `pitch` float NOT NULL,
@@ -206,6 +206,7 @@ CREATE TABLE `nodes` (
   `starting_view_pitch` float DEFAULT NULL,
   `is_campus_entrance` tinyint(1) NOT NULL DEFAULT 0,
   `is_building_entrance` tinyint(1) NOT NULL DEFAULT 0,
+  `discharges_outside` tinyint(1) NOT NULL DEFAULT 0,
   `photo_path` varchar(500) DEFAULT NULL,
   `flowchart_position_x` float DEFAULT NULL,
   `flowchart_position_y` float DEFAULT NULL,
@@ -292,34 +293,6 @@ CREATE TABLE `tour_sections` (
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `tour_stop_marker_photos`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tour_stop_marker_photos` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `marker_id` int(10) unsigned NOT NULL,
-  `photo_path` varchar(500) NOT NULL,
-  `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`),
-  KEY `marker_id` (`marker_id`),
-  CONSTRAINT `tour_stop_marker_photos_ibfk_1` FOREIGN KEY (`marker_id`) REFERENCES `tour_stop_markers` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `tour_stop_markers`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tour_stop_markers` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `tour_stop_id` varchar(64) NOT NULL,
-  `type` varchar(64) NOT NULL DEFAULT 'equipment',
-  `label` varchar(255) NOT NULL,
-  `yaw` float NOT NULL,
-  `pitch` float NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `tour_stop_markers_ibfk_1` (`tour_stop_id`),
-  CONSTRAINT `tour_stop_markers_ibfk_1` FOREIGN KEY (`tour_stop_id`) REFERENCES `tour_stops` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tour_stop_neighbors`;

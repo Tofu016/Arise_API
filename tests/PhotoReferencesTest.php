@@ -32,7 +32,6 @@ class PhotoReferencesTest extends TestCase
             'nodes' => array(array('photo_path' => 'panoramas/gd1/a.jpg')),
             'tour_stops' => array(array('photo_path' => 'tourpanorama/b.jpg')),
             'tour_sections' => array(array('cover_photo_path' => 'tourcover/c.jpg')),
-            'tour_stop_marker_photos' => array(array('photo_path' => 'tourmarker/d.jpg')),
             'placard_dialogs' => array(array('photo_path' => 'roomphoto/gd1/e.jpg', 'photo_360_path' => 'room360/gd1/f.webp')),
             'signage_slides' => array(array('media_path' => 'signage/g.mp4')),
         );
@@ -46,7 +45,6 @@ class PhotoReferencesTest extends TestCase
             'roomphoto/gd1/e.jpg',
             'signage/g.mp4',
             'tourcover/c.jpg',
-            'tourmarker/d.jpg',
             'tourpanorama/b.jpg',
         ), $paths);
     }

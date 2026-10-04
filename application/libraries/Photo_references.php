@@ -26,7 +26,6 @@ class Photo_references
         'tour_stops' => array('photo_path'),
         'placard_dialogs' => array('photo_path', 'photo_360_path'),
         'tour_sections' => array('cover_photo_path'),
-        'tour_stop_marker_photos' => array('photo_path'),
         'signage_slides' => array('media_path'),
     );
 

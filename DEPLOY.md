@@ -631,6 +631,41 @@ at a real mail server if that happens. Mail is sent straight from the
 request (no queue, no cron): a failed send is logged to
 `application/logs/` and the request still succeeds.
 
+**Type ids match their labels** — renames the node types (`transition` to
+`stairs`, `transitionExit` to `fire_exit`, `openArea` to `open_area`, `portal`
+to `building_transition`) and the marker types (`exit` to `emergency_exit`,
+`hydrant` to `fire_extinguisher`), and renames every node whose id follows
+the generated `{building}_f{floor}_{type}{NN}` pattern so its type part
+matches (`gd1_f2_transition01` becomes `gd1_f2_stairs01`). Custom-named
+nodes keep their ids. Take a backup first. Not additive: the old web and
+mobile builds do not know the new ids, so run it together with deploying the
+API, web and mobile builds:
+
+```bash
+mysqldump -u arise -p arise_web > backup-before-rename.sql
+mysql -u arise -p arise_web < migrations/2026-10-05_rename_type_ids.sql
+```
+
+**Safe point flag for emergency routing** (additive): adds `discharges_outside` to `nodes`,
+the admin's confirmation that an Entrance or Fire Exit node leads outside at ground level.
+"Nearest Exit" only routes to nodes flagged this way (plus Open Area and Parking nodes);
+a building with no flagged node falls back to its Entrance nodes and the visitor is told
+the exits have not been confirmed. Apply it before deploying the web code that saves the
+field, then flag each building's real exits in the node editor:
+
+```bash
+mysql -u arise -p arise_web < migrations/2026-10-06_node_discharges_outside.sql
+```
+
+**Virtual Tour markers removed** — the Virtual Tour no longer has markers or
+marker photos. Drop the two tables (check they are empty first; any photos
+under `uploads/tourmarker/` are no longer referenced):
+
+```sql
+DROP TABLE tour_stop_marker_photos;
+DROP TABLE tour_stop_markers;
+```
+
 ---
 
 ## Part C — Rollback
