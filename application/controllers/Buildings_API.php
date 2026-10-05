@@ -13,8 +13,8 @@ class Buildings_API extends MY_Controller
         $this->load->model('Buildings_Model');
     }
 
-    // GET /Buildings_API/getAll — public, matching nodes/tour data
-    // being reachable by the general navigation UI, not just admins.
+    // GET /Buildings_API/getAll — public, matching node data being
+    // reachable by the general navigation UI, not just admins.
     public function getAll()
     {
         $buildings = $this->Buildings_Model->getAll();

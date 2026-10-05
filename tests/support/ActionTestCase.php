@@ -58,12 +58,6 @@ class ElevatorsApiHarness extends Elevators_API
     public $modelNames = array('Elevators_Model', 'Buildings_Model');
 }
 
-class TourStopsApiHarness extends TourStops_API
-{
-    use ControllerHarness;
-    public $modelNames = array('TourStops_Model');
-}
-
 class BuildingsApiHarness extends Buildings_API
 {
     use ControllerHarness;
@@ -74,12 +68,6 @@ class AdminsApiHarness extends Admins_API
 {
     use ControllerHarness;
     public $modelNames = array('Admins_Model', 'Auth_Model');
-}
-
-class TourSectionsApiHarness extends TourSections_API
-{
-    use ControllerHarness;
-    public $modelNames = array('TourSections_Model');
 }
 
 class PlacardDialogsApiHarness extends PlacardDialogs_API

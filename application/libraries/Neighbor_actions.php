@@ -1,10 +1,10 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-// The three neighbour-link actions that Nodes_API and TourStops_API both
-// expose, defined once. They differ only in the name of the request field
-// that identifies the owner ("node_id" / "stop_id") and in which model
-// they call, so a controller using this supplies just those two hooks:
+// The three neighbour-link actions a graph controller exposes, defined
+// once. A controller differs only in the name of the request field that
+// identifies the owner ("node_id") and in which model it calls, so a
+// controller using this supplies just those two hooks:
 //
 //   protected function neighborOwnerField()  — e.g. 'node_id'
 //   protected function neighborModel()       — e.g. $this->Nodes_Model

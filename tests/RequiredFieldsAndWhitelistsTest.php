@@ -40,9 +40,6 @@ class RequiredFieldsAndWhitelistsTest extends ActionTestCase
             array('NodesApiHarness', 'updateNeighborAngle', array('node_id', 'neighbor_id', 'yaw', 'pitch')),
             array('NodesApiHarness', 'updateNeighborDefaultView', array('node_id', 'neighbor_id', 'default_yaw', 'default_pitch')),
             array('NodesApiHarness', 'addMarker', array('node_id', 'type', 'label', 'yaw', 'pitch')),
-            array('TourStopsApiHarness', 'addNeighbor', array('stop_id', 'neighbor_id', 'yaw', 'pitch', 'reverse_yaw', 'reverse_pitch')),
-            array('TourStopsApiHarness', 'updateNeighborAngle', array('stop_id', 'neighbor_id', 'yaw', 'pitch')),
-            array('TourStopsApiHarness', 'updateNeighborDefaultView', array('stop_id', 'neighbor_id', 'default_yaw', 'default_pitch')),
         );
 
         $cases = array();
@@ -83,7 +80,6 @@ class RequiredFieldsAndWhitelistsTest extends ActionTestCase
     {
         $sites = array(
             array('BuildingsApiHarness', 'update', array('gd1'), array('name' => 'x', 'floor_count' => 2, 'lat' => 1.5, 'lng' => 2.5)),
-            array('TourSectionsApiHarness', 'update', array('1'), array('label' => 'x', 'cover_photo_path' => 'tourcover/a.jpg')),
             array('NodesApiHarness', 'update', array('a'), array(
                 'name' => 'x', 'building' => 'gd1', 'floor' => 2, 'type' => 'hallway', 'photo_path' => 'panoramas/gd1/a.jpg',
                 'flowchart_position_x' => 1, 'flowchart_position_y' => 2, 'is_starting_node' => 1,
@@ -91,7 +87,6 @@ class RequiredFieldsAndWhitelistsTest extends ActionTestCase
                 'is_building_entrance' => 1, 'is_emergency_destination' => 1,
             )),
             array('NodesApiHarness', 'updateMarker', array('7'), array('type' => 'room', 'label' => 'x', 'yaw' => 1, 'pitch' => 2)),
-            array('TourStopsApiHarness', 'update', array('a'), array('name' => 'x', 'section_id' => '1', 'photo_path' => 'tourpanorama/a.jpg', 'cover_photo_path' => 'tourcover/a.jpg', 'description' => 'd')),
             array('PlacardDialogsApiHarness', 'update', array('1'), array(
                 'room_name' => 'x', 'description' => 'd', 'department' => 'd', 'contact_number' => '(02) 8123-4567',
                 'photo_path' => 'roomphoto/gd1/a.jpg', 'photo_360_path' => 'room360/gd1/a.webp', 'link' => 'l',

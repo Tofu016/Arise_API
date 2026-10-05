@@ -17,9 +17,9 @@ class PhotoActionController extends MY_Controller
         return $this->store;
     }
 
-    public function uploadCover()
+    public function uploadMedia()
     {
-        return $this->savePhoto('tourcover');
+        return $this->savePhoto('signage');
     }
 
     public function uploadPanorama($building)
@@ -90,11 +90,11 @@ class SavePhotoActionTest extends TestCase
         $this->attach(base64_decode(self::PNG));
         $_POST['filename'] = 'library';
 
-        $r = $this->controller->uploadCover();
+        $r = $this->controller->uploadMedia();
 
         $this->assertSame(200, $r->status());
-        $this->assertSame('{"success":true,"path":"tourcover\/library.png"}', $r->json());
-        $this->assertFileExists($this->base . '/public/tourcover/library.png');
+        $this->assertSame('{"success":true,"path":"signage\/library.png"}', $r->json());
+        $this->assertFileExists($this->base . '/public/signage/library.png');
     }
 
     public function testTheBuildingIsPassedThroughForPerBuildingCategories()
@@ -121,10 +121,13 @@ class SavePhotoActionTest extends TestCase
     {
         $this->attach('<?php echo 1;');
 
-        $r = $this->controller->uploadCover();
+        $r = $this->controller->uploadMedia();
 
         $this->assertSame(400, $r->status());
-        $this->assertSame('{"success":false,"error":"The uploaded file is not a valid, recognized image."}', $r->json());
+        $this->assertSame(
+            '{"success":false,"error":"The uploaded file is not a valid, recognized image (JPG, PNG, GIF, WebP) or video (MP4, WebM)."}',
+            $r->json()
+        );
     }
 
     public function testARequestPhpDiscardedIsRepliedAs413()
@@ -132,7 +135,7 @@ class SavePhotoActionTest extends TestCase
         // post_max_size blown: bytes were sent, but $_POST and $_FILES are empty.
         $_SERVER['CONTENT_LENGTH'] = (string) (50 * 1048576);
 
-        $r = $this->controller->uploadCover();
+        $r = $this->controller->uploadMedia();
 
         $this->assertSame(413, $r->status());
         $this->assertStringContainsString('too large', $r->body()['error']);
@@ -142,7 +145,7 @@ class SavePhotoActionTest extends TestCase
     {
         $this->attach('x', UPLOAD_ERR_CANT_WRITE);
 
-        $r = $this->controller->uploadCover();
+        $r = $this->controller->uploadMedia();
 
         $this->assertSame(500, $r->status());
         $this->assertStringNotContainsString('code', $r->body()['error']);
@@ -155,7 +158,7 @@ class SavePhotoActionTest extends TestCase
     {
         $this->attach('<?php echo 1;');
 
-        $this->controller->uploadCover();
+        $this->controller->uploadMedia();
 
         $this->assertSame(array(), $GLOBALS['logged_messages']);
     }

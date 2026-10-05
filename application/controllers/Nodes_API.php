@@ -4,12 +4,11 @@ defined('BASEPATH') or exit('No direct script access allowed');
 require_once APPPATH . 'libraries/Neighbor_actions.php';
 
 // Same conventions throughout — getAll() public, writes behind
-// requireAdmin(). Two extra validation steps exist here specifically
-// because nodes has real constraints tour_stops didn't: create()
-// checks the building actually exists before inserting (a required FK,
-// unlike tour_stops' optional section_id), and addMarker() checks the
-// type against the schema's real ENUM before inserting — both to turn
-// what would otherwise be a raw SQL error into a clear message. Elevator
+// requireAdmin(). Two extra validation steps exist here because nodes
+// has real constraints: create() checks the building actually exists
+// before inserting (a required FK), and addMarker() checks the type
+// against the schema's real ENUM before inserting — both to turn what
+// would otherwise be a raw SQL error into a clear message. Elevator
 // markers are landings of a row in `elevators` (see Elevators_API) and
 // are checked against it before they're written. An emergency exit marker
 // lists its landing nodes (where the hidden fire stairs come out), which
@@ -26,8 +25,8 @@ class Nodes_API extends MY_Controller
         $this->load->model('Elevators_Model');
     }
 
-    // GET /Nodes_API/getAll — public, same reasoning as tour_stops/
-    // buildings: the general navigation UI needs this, not just admins.
+    // GET /Nodes_API/getAll — public, same reasoning as buildings: the
+    // general navigation UI needs this, not just admins.
     public function getAll()
     {
         $nodes = $this->Nodes_Model->getAll();
@@ -260,8 +259,8 @@ class Nodes_API extends MY_Controller
         return Api_response::ok();
     }
 
-    // addNeighbor, removeNeighbor and updateNeighborAngle are shared with
-    // TourStops_API — see Neighbor_actions. Only these two hooks differ.
+    // addNeighbor, removeNeighbor and updateNeighborAngle come from
+    // Neighbor_actions. Only these two hooks differ.
     protected function neighborOwnerField()
     {
         return 'node_id';

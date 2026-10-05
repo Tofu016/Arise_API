@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-// Simpler than nodes/tour_stops — no graph structure, just one child
+// Simpler than nodes — no graph structure, just one child
 // table (search terms, feeding the mobile app's AR placard-scanner).
 // room_name is UNIQUE in the schema — checked explicitly before insert/
 // update rather than letting a duplicate surface as a raw SQL error,
@@ -135,8 +135,7 @@ class PlacardDialogs_Model extends CI_Model
     }
 
     // $searchTerms: null leaves them untouched, an array (including
-    // empty) replaces the full set — same convention as
-    // TourStops_Model::updateMarker's photo handling.
+    // empty) replaces the full set.
     public function update($id, $data, $searchTerms = null, $extraPhotos = null)
     {
         if (!empty($data)) {

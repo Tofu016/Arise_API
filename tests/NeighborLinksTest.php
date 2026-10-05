@@ -1,8 +1,8 @@
 <?php
 use PHPUnit\Framework\TestCase;
 
-// Neighbor_links knows nothing about nodes or tour stops: it works on
-// whatever edge table and owner column it is given.
+// Neighbor_links knows nothing about nodes: it works on whatever edge
+// table and owner column it is given.
 class NeighborLinksTest extends TestCase
 {
     private $db;

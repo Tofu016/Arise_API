@@ -28,8 +28,6 @@ class Photo_store
     //                see Signage_API) needs it; the store still calls every
     //                file it holds a Photo.
     const CATEGORIES = array(
-        'tourpanorama' => array('visibility' => 'public', 'layout' => 'flat', 'listed' => true),
-        'tourcover' => array('visibility' => 'public', 'layout' => 'flat', 'listed' => true),
         'panoramas' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => true),
         'roomphoto' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => true),
         'room360' => array('visibility' => 'protected', 'layout' => 'per-building', 'listed' => true),

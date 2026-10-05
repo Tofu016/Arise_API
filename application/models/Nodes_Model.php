@@ -5,8 +5,7 @@ require_once APPPATH . 'libraries/Neighbor_links.php';
 // For Elevators_Model::parseFloors; CI's loader skips an already-declared class.
 require_once APPPATH . 'models/Elevators_Model.php';
 
-// The most complex resource — same bidirectional neighbor-link pattern
-// as TourStops_Model, plus:
+// The most complex resource — a bidirectional neighbor-link graph, plus:
 //  - a REQUIRED (not optional) foreign key into buildings
 //  - node_markers.type is a real ENUM in the schema (room/facility/
 //    emergency_exit/fire_extinguisher/elevator) — an
@@ -93,8 +92,7 @@ class Nodes_Model extends CI_Model
         return $this->db->get()->result_array();
     }
 
-    // The edge table and its owner column are the only things that differ
-    // from TourStops_Model's neighbour links — see Neighbor_links.
+    // The edge table and its owner column are all Neighbor_links needs.
     private function neighborLinks()
     {
         return new Neighbor_links($this->db, 'node_neighbors', 'node_id');
@@ -234,8 +232,7 @@ class Nodes_Model extends CI_Model
 
     // $requestedId: NodeForm.jsx suggests/lets the admin edit the id
     // before saving, and NodeEditorPage.jsx selects that exact id
-    // immediately after creating, without waiting for a server response
-    // — same reasoning and contract as TourStops_Model::create.
+    // immediately after creating, without waiting for a server response.
     public function create($name, $building, $floor, $type, $photoPath = null, $requestedId = null)
     {
         $id = !empty($requestedId) ? $requestedId : $this->generateUniqueId($building, $floor, $type);
@@ -259,9 +256,8 @@ class Nodes_Model extends CI_Model
     }
 
     // Safe because of the ON UPDATE CASCADE fix on node_neighbors,
-    // node_markers, AND node_rooms — three tables here, one more than
-    // tour_stops needed, since a node's room list would otherwise be
-    // silently orphaned by a rename too.
+    // node_markers AND node_rooms — all three, since a node's room list
+    // would otherwise be silently orphaned by a rename too.
     public function renameNode($oldId, $newId)
     {
         $this->db->where('id', $oldId);

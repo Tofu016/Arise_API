@@ -74,7 +74,7 @@ sudo chown -R www-data:www-data uploads protected-uploads
 sudo chmod -R 775 uploads protected-uploads
 ```
 
-- `uploads/` — public tour images. Sits under DocumentRoot, so Apache
+- `uploads/` — public images (kiosk signage). Sits under DocumentRoot, so Apache
   serves it directly at `https://…/uploads/…` (no extra config).
 - `protected-uploads/` — indoor images, streamed only through
   `IndoorUploads_API::serve()`, which has no auth check (anyone who knows
@@ -161,7 +161,7 @@ sudo chmod -R 775 application/logs application/cache
         Require all granted
     </Directory>
 
-    # Public tour images — served directly (the folder is under DocumentRoot)
+    # Public images — served directly (the folder is under DocumentRoot)
     <Directory /var/www/arise-api/uploads>
         Require all granted
         Options -Indexes
@@ -284,7 +284,7 @@ sudo certbot --apache -d api.yourdomain.edu.ph
 curl -i https://api.yourdomain.edu.ph/index.php/Welcome                    # 200, CI welcome page
 curl -i https://api.yourdomain.edu.ph/.env                                 # 403
 curl -i https://api.yourdomain.edu.ph/protected-uploads/panoramas/x.jpg    # 403
-# From the deployed web app: sign in, load a tour, upload a test panorama.
+# From the deployed web app: sign in, load the map, upload a test panorama.
 ```
 
 ---
@@ -336,17 +336,15 @@ Until it is applied, `Nodes_API update` fails (unknown column
 `is_starting_node`) whenever a node is saved with that field — apply it first.
 
 **Default view per hotspot link, and per starting node** — adds
-`default_yaw`/`default_pitch` to `node_neighbors` and `tour_stop_neighbors`
-(the camera view a visitor lands facing when arriving via that specific
-link), and `starting_view_yaw`/`starting_view_pitch` to `nodes` (the view
-for a floor's starting node when reached from the floor/building picker):
+`default_yaw`/`default_pitch` to `node_neighbors` (the camera view a visitor
+lands facing when arriving via that specific link), and
+`starting_view_yaw`/`starting_view_pitch` to `nodes` (the view for a floor's
+starting node when reached from the floor/building picker). This step once
+altered `tour_stop_neighbors` the same way; skip that, the Virtual Tour and
+its tables are gone (see below):
 
 ```sql
 ALTER TABLE node_neighbors
-  ADD COLUMN default_yaw   float DEFAULT NULL AFTER pitch,
-  ADD COLUMN default_pitch float DEFAULT NULL AFTER default_yaw;
-
-ALTER TABLE tour_stop_neighbors
   ADD COLUMN default_yaw   float DEFAULT NULL AFTER pitch,
   ADD COLUMN default_pitch float DEFAULT NULL AFTER default_yaw;
 
@@ -357,7 +355,6 @@ ALTER TABLE nodes
 
 ```bash
 mysql -u arise -p arise_web -e "ALTER TABLE node_neighbors ADD COLUMN default_yaw float DEFAULT NULL AFTER pitch, ADD COLUMN default_pitch float DEFAULT NULL AFTER default_yaw"
-mysql -u arise -p arise_web -e "ALTER TABLE tour_stop_neighbors ADD COLUMN default_yaw float DEFAULT NULL AFTER pitch, ADD COLUMN default_pitch float DEFAULT NULL AFTER default_yaw"
 mysql -u arise -p arise_web -e "ALTER TABLE nodes ADD COLUMN starting_view_yaw float DEFAULT NULL AFTER is_starting_node, ADD COLUMN starting_view_pitch float DEFAULT NULL AFTER starting_view_yaw"
 ```
 
@@ -478,7 +475,7 @@ tracks analytics events.
 videos shown in the kiosk's bottom band, each with its crop, duration,
 rotation position and optional run window, plus one settings row (rotation
 order, transition, default duration). Media files go to
-`UPLOAD_ROOT/signage/`, served directly like `tourpanorama/`. Named
+`UPLOAD_ROOT/signage/`, served directly by Apache. Named
 "signage" rather than "ads" on purpose: ad blockers hide URLs and elements
 that look like advertisements. `signage_settings` needs no seed row; the
 API falls back to its defaults until the first save.
@@ -669,6 +666,19 @@ under `uploads/tourmarker/` are no longer referenced):
 DROP TABLE tour_stop_marker_photos;
 DROP TABLE tour_stop_markers;
 ```
+
+**Virtual Tour removed entirely** — the public `/tour` page, its two admin
+editors and the `TourStops_API`/`TourSections_API`/`TourUploads_API`
+endpoints are all gone. Drop the remaining three tables (take a dump first
+if the stops still hold anything you want):
+
+```bash
+mysqldump -u arise -p arise_web tour_sections tour_stops tour_stop_neighbors > tour-tables-backup.sql
+mysql -u arise -p arise_web < migrations/2026-10-12_drop_virtual_tour.sql
+```
+
+Photos under `uploads/tourpanorama/` and `uploads/tourcover/` are simply
+unreferenced afterwards — delete those folders by hand once you are sure.
 
 ---
 

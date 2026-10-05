@@ -10,19 +10,10 @@ class NodesModelHarness extends Nodes_Model
     }
 }
 
-class TourStopsModelHarness extends TourStops_Model
-{
-    public $db;
-
-    public function __construct()
-    {
-    }
-}
-
-// Pins what Nodes_Model and TourStops_Model do with neighbour links, by
-// the exact queries they issue against a recording FakeDb. The two models
-// are meant to behave identically here, differing only in the table and
-// the owner column, so every test runs against both.
+// Pins what Nodes_Model does with neighbour links, by the exact queries it
+// issues against a recording FakeDb. Kept as a data provider over the
+// model's table and owner column, so the shape stays explicit in every
+// assertion.
 class NeighborModelsTest extends TestCase
 {
     /** [model harness, edges table, owner column, owner table] */
@@ -30,7 +21,6 @@ class NeighborModelsTest extends TestCase
     {
         return array(
             'nodes' => array('NodesModelHarness', 'node_neighbors', 'node_id', 'nodes'),
-            'tour stops' => array('TourStopsModelHarness', 'tour_stop_neighbors', 'tour_stop_id', 'tour_stops'),
         );
     }
 

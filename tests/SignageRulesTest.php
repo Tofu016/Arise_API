@@ -38,7 +38,7 @@ class SignageRulesTest extends TestCase
 
     public function testMediaMustBeASignagePathNotAnotherCategoryOrAGuess()
     {
-        foreach (array('tourpanorama/a.jpg', 'signage/../a.jpg', 'a.jpg', 'signage/x/a.jpg') as $path) {
+        foreach (array('panoramas/gd1/a.jpg', 'signage/../a.jpg', 'a.jpg', 'signage/x/a.jpg') as $path) {
             $this->assertStringStartsWith('media_path', $this->refusal(function () use ($path) {
                 Signage_rules::slideFields($this->slide(array('media_path' => $path)), true);
             }), $path);

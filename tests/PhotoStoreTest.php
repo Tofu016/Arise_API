@@ -71,11 +71,11 @@ class PhotoStoreTest extends TestCase
 
     public function testSavesAFlatPublicPhotoUnderThePublicRoot()
     {
-        $r = $this->store->save('tourcover', $this->png(), 'library');
+        $r = $this->store->save('signage', $this->png(), 'library');
 
         $this->assertTrue($r['ok']);
-        $this->assertSame('tourcover/library.png', $r['path']);
-        $this->assertFileExists($this->base . '/public/tourcover/library.png');
+        $this->assertSame('signage/library.png', $r['path']);
+        $this->assertFileExists($this->base . '/public/signage/library.png');
     }
 
     public function testSavesAPerBuildingProtectedPhotoUnderTheProtectedRoot()
@@ -89,19 +89,19 @@ class PhotoStoreTest extends TestCase
 
     public function testFallsBackToTheUploadedFilesOwnNameWhenNoNameIsGiven()
     {
-        $r = $this->store->save('tourcover', $this->png('from-client.png'));
+        $r = $this->store->save('signage', $this->png('from-client.png'));
 
-        $this->assertSame('tourcover/from-client.png', $r['path']);
+        $this->assertSame('signage/from-client.png', $r['path']);
     }
 
     public function testSavedExtensionComesFromTheVerifiedImageNotTheClientName()
     {
-        $r = $this->store->save('tourcover', $this->png('shell.php'), 'shell.php');
-        $this->assertSame('tourcover/shell.png', $r['path']);
+        $r = $this->store->save('signage', $this->png('shell.php'), 'shell.php');
+        $this->assertSame('signage/shell.png', $r['path']);
 
         $gif = $this->upload(base64_decode(self::GIF), 'x.png');
-        $r = $this->store->save('tourcover', $gif, 'anim.png');
-        $this->assertSame('tourcover/anim.gif', $r['path']);
+        $r = $this->store->save('signage', $gif, 'anim.png');
+        $this->assertSame('signage/anim.gif', $r['path']);
     }
 
     // ---- save: signage video --------------------------------------
@@ -151,7 +151,7 @@ class PhotoStoreTest extends TestCase
 
     public function testOnlySignageAcceptsVideo()
     {
-        $r = $this->store->save('tourcover', $this->mp4(), 'clip');
+        $r = $this->store->save('roomphoto', $this->mp4(), 'clip', 'gd1');
 
         $this->assertSame(400, $r['status']);
         $this->assertStringNotContainsString('video', $r['error']);
@@ -166,12 +166,12 @@ class PhotoStoreTest extends TestCase
 
     public function testRejectsAFileThatIsNotAnImage()
     {
-        $r = $this->store->save('tourcover', $this->upload('<?php echo 1;', 'photo.jpg'), 'photo');
+        $r = $this->store->save('signage', $this->upload('<?php echo 1;', 'photo.jpg'), 'photo');
 
         $this->assertFalse($r['ok']);
         $this->assertSame(400, $r['status']);
         $this->assertStringContainsString('not a valid, recognized image', $r['error']);
-        $this->assertFileDoesNotExist($this->base . '/public/tourcover/photo.jpg');
+        $this->assertFileDoesNotExist($this->base . '/public/signage/photo.jpg');
     }
 
     public function testReportsAFailedMove()
@@ -180,7 +180,7 @@ class PhotoStoreTest extends TestCase
             return false;
         }));
 
-        $r = $store->save('tourcover', $this->png(), 'x');
+        $r = $store->save('signage', $this->png(), 'x');
 
         $this->assertSame(500, $r['status']);
         $this->assertSame('Failed to save the uploaded file.', $r['error']);
@@ -191,7 +191,7 @@ class PhotoStoreTest extends TestCase
     /** @dataProvider unsafeNames */
     public function testRejectsUnsafeFilenames($name)
     {
-        $r = $this->store->save('tourcover', $this->png(), $name);
+        $r = $this->store->save('signage', $this->png(), $name);
 
         $this->assertFalse($r['ok']);
         $this->assertSame(400, $r['status']);
@@ -233,7 +233,7 @@ class PhotoStoreTest extends TestCase
     public function testAFlatCategoryCannotTakeABuilding()
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->store->save('tourcover', $this->png(), 'x', 'gd1');
+        $this->store->save('signage', $this->png(), 'x', 'gd1');
     }
 
     public function testAnUnknownCategoryIsAProgrammingError()
@@ -248,7 +248,7 @@ class PhotoStoreTest extends TestCase
     {
         $incoming = array('file' => null, 'request_bytes' => 20 * 1048576, 'body_discarded' => true);
 
-        $r = $this->store->save('tourcover', $incoming, 'x');
+        $r = $this->store->save('signage', $incoming, 'x');
 
         $this->assertSame(413, $r['status']);
         $this->assertStringContainsString('20 MB', $r['error']);
@@ -259,7 +259,7 @@ class PhotoStoreTest extends TestCase
     {
         $incoming = $this->upload('x', 'p.png', UPLOAD_ERR_INI_SIZE);
 
-        $r = $this->store->save('tourcover', $incoming, 'x');
+        $r = $this->store->save('signage', $incoming, 'x');
 
         $this->assertSame(413, $r['status']);
         $this->assertStringContainsString('2 MB', $r['error']);
@@ -267,7 +267,7 @@ class PhotoStoreTest extends TestCase
 
     public function testNoFileAtAllIsA400()
     {
-        $r = $this->store->save('tourcover', array('file' => null, 'request_bytes' => 0, 'body_discarded' => false), 'x');
+        $r = $this->store->save('signage', array('file' => null, 'request_bytes' => 0, 'body_discarded' => false), 'x');
 
         $this->assertSame(400, $r['status']);
         $this->assertStringContainsString('No file was attached', $r['error']);
@@ -275,7 +275,7 @@ class PhotoStoreTest extends TestCase
 
     public function testAPartialUploadIsA400()
     {
-        $r = $this->store->save('tourcover', $this->upload('x', 'p.png', UPLOAD_ERR_PARTIAL), 'x');
+        $r = $this->store->save('signage', $this->upload('x', 'p.png', UPLOAD_ERR_PARTIAL), 'x');
 
         $this->assertSame(400, $r['status']);
         $this->assertStringContainsString('partially', $r['error']);
@@ -283,7 +283,7 @@ class PhotoStoreTest extends TestCase
 
     public function testServerSideUploadFailuresAreA500WithAPrivateLogNote()
     {
-        $r = $this->store->save('tourcover', $this->upload('x', 'p.png', UPLOAD_ERR_NO_TMP_DIR), 'x');
+        $r = $this->store->save('signage', $this->upload('x', 'p.png', UPLOAD_ERR_NO_TMP_DIR), 'x');
 
         $this->assertSame(500, $r['status']);
         $this->assertStringNotContainsString('code', $r['error']);
@@ -305,11 +305,11 @@ class PhotoStoreTest extends TestCase
         $this->assertFileExists($r['full_path']);
     }
 
-    public function testResolveReportsPublicVisibilityForTourCategories()
+    public function testResolveReportsPublicVisibilityForAPublicCategory()
     {
-        $this->store->save('tourcover', $this->png(), 'c');
+        $this->store->save('signage', $this->png(), 'c');
 
-        $this->assertSame('public', $this->store->resolve('tourcover/c.png')['visibility']);
+        $this->assertSame('public', $this->store->resolve('signage/c.png')['visibility']);
     }
 
     /** @dataProvider invalidPaths */
@@ -329,7 +329,7 @@ class PhotoStoreTest extends TestCase
             'traversal in building' => array('panoramas/../../secret.png'),
             'dots only' => array('panoramas/../..'),
             'unknown category' => array('etc/passwd'),
-            'flat too deep' => array('tourcover/a/b.png'),
+            'flat too deep' => array('signage/a/b.png'),
             'per-building too shallow' => array('panoramas/x.png'),
             'empty segment' => array('panoramas//x.png'),
             'empty' => array(''),
@@ -339,7 +339,7 @@ class PhotoStoreTest extends TestCase
 
     public function testResolveReportsAMissingFileAsNotFound()
     {
-        $r = $this->store->resolve('tourcover/missing.png');
+        $r = $this->store->resolve('signage/missing.png');
 
         $this->assertFalse($r['ok']);
         $this->assertSame('not_found', $r['reason']);
@@ -350,11 +350,11 @@ class PhotoStoreTest extends TestCase
 
     public function testRemoveDeletesThePhotoFile()
     {
-        $this->store->save('tourcover', $this->png(), 'gone');
+        $this->store->save('signage', $this->png(), 'gone');
 
-        $this->assertTrue($this->store->remove('tourcover/gone.png')['ok']);
-        $this->assertFileDoesNotExist($this->base . '/public/tourcover/gone.png');
-        $this->assertSame('not_found', $this->store->remove('tourcover/gone.png')['reason']);
+        $this->assertTrue($this->store->remove('signage/gone.png')['ok']);
+        $this->assertFileDoesNotExist($this->base . '/public/signage/gone.png');
+        $this->assertSame('not_found', $this->store->remove('signage/gone.png')['reason']);
     }
 
     public function testRemoveRefusesAnInvalidPathAndTouchesNothing()
@@ -362,7 +362,7 @@ class PhotoStoreTest extends TestCase
         $outside = $this->base . '/secret.png';
         file_put_contents($outside, 'keep me');
 
-        $r = $this->store->remove('tourcover/../../secret.png');
+        $r = $this->store->remove('signage/../../secret.png');
 
         $this->assertSame('invalid_path', $r['reason']);
         $this->assertFileExists($outside);
@@ -372,7 +372,7 @@ class PhotoStoreTest extends TestCase
 
     public function testListsPhotosFromEveryListedCategory()
     {
-        $this->store->save('tourcover', $this->png(), 'c');
+        $this->store->save('signage', $this->png(), 'c');
         $this->store->save('panoramas', $this->png(), 'p', 'gd1');
         $this->store->save('roomphoto', $this->png(), 'r', 'gd2');
 
@@ -382,11 +382,11 @@ class PhotoStoreTest extends TestCase
             $byPath[$p['path']] = $p;
         }
 
-        $this->assertSame(array('panoramas/gd1/p.png', 'roomphoto/gd2/r.png', 'tourcover/c.png'), $this->sortedKeys($byPath));
-        $this->assertSame('public', $byPath['tourcover/c.png']['visibility']);
+        $this->assertSame(array('panoramas/gd1/p.png', 'roomphoto/gd2/r.png', 'signage/c.png'), $this->sortedKeys($byPath));
+        $this->assertSame('public', $byPath['signage/c.png']['visibility']);
         $this->assertSame('protected', $byPath['panoramas/gd1/p.png']['visibility']);
-        $this->assertGreaterThan(0, $byPath['tourcover/c.png']['size_bytes']);
-        $this->assertGreaterThan(0, $byPath['tourcover/c.png']['modified_at']);
+        $this->assertGreaterThan(0, $byPath['signage/c.png']['size_bytes']);
+        $this->assertGreaterThan(0, $byPath['signage/c.png']['modified_at']);
     }
 
     public function testDoesNotListPhotosInTheReviewHoldingArea()

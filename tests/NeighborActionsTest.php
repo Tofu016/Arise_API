@@ -1,7 +1,7 @@
 <?php
-// Nodes_API and TourStops_API get their neighbour-link actions from
-// the Neighbor_actions trait. The URLs must not change: trait methods must
-// still be reachable through _remap, and the two hooks must not be.
+// Nodes_API gets its neighbour-link actions from the Neighbor_actions
+// trait. The URLs must not change: trait methods must still be reachable
+// through _remap, and the two hooks must not be.
 class NeighborActionsTest extends ActionTestCase
 {
     const BASES = array('MY_Controller', 'CI_Controller');
@@ -10,7 +10,6 @@ class NeighborActionsTest extends ActionTestCase
     {
         return array(
             'nodes' => array('NodesApiHarness', 'node_id', 'Nodes_Model'),
-            'tour stops' => array('TourStopsApiHarness', 'stop_id', 'TourStops_Model'),
         );
     }
 

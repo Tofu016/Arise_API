@@ -1,23 +1,23 @@
 # Arise API
 
-Backend for the Arise campus app: indoor room navigation and public virtual tours, both built from photos that admins upload.
+Backend for the Arise campus app: indoor room navigation, built from photos that admins upload.
 
 ## Language
 
 **Photo**:
-An image file an admin uploads to be shown in indoor or virtual-tour content.
+An image file an admin uploads to be shown in indoor navigation or kiosk signage content.
 _Avoid_: Image, upload, file (when you mean the stored thing rather than the act)
 
 **Photo path**:
-The relative string that identifies a Photo everywhere, including in the database, e.g. `panoramas/gd1/lobby.webp` or `tourcover/library.jpg`.
+The relative string that identifies a Photo everywhere, including in the database, e.g. `panoramas/gd1/lobby.webp` or `signage/library.jpg`.
 _Avoid_: URL, filename, filepath
 
 **Category**:
-The first segment of a Photo path (`tourpanorama`, `panoramas`, `roomphoto`, `signage`, …). It decides whether a Photo is public or protected, and how it is laid out on disk.
+The first segment of a Photo path (`panoramas`, `roomphoto`, `room360`, `signage`, …). It decides whether a Photo is public or protected, and how it is laid out on disk.
 _Avoid_: Folder, subfolder, type
 
 **Public photo**:
-A Photo in a virtual-tour or signage Category, served directly by Apache to anyone. (Signage may also be a video.)
+A Photo in a public Category (signage), served directly by Apache to anyone. (Signage may also be a video.)
 _Avoid_: Open photo
 
 **Protected photo**:

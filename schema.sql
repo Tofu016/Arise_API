@@ -314,53 +314,6 @@ CREATE TABLE `signage_slides` (
   KEY `active_order` (`is_active`,`sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `tour_sections`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tour_sections` (
-  `id` varchar(64) NOT NULL,
-  `label` varchar(255) NOT NULL,
-  `cover_photo_path` varchar(500) DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `tour_stop_neighbors`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tour_stop_neighbors` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  `tour_stop_id` varchar(64) NOT NULL,
-  `neighbor_id` varchar(64) NOT NULL,
-  `yaw` float NOT NULL,
-  `pitch` float NOT NULL,
-  `default_yaw` float DEFAULT NULL,
-  `default_pitch` float DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uniq_tour_stop_edge` (`tour_stop_id`,`neighbor_id`),
-  KEY `tour_stop_neighbors_ibfk_2` (`neighbor_id`),
-  CONSTRAINT `tour_stop_neighbors_ibfk_1` FOREIGN KEY (`tour_stop_id`) REFERENCES `tour_stops` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `tour_stop_neighbors_ibfk_2` FOREIGN KEY (`neighbor_id`) REFERENCES `tour_stops` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `tour_stops`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `tour_stops` (
-  `id` varchar(64) NOT NULL,
-  `name` varchar(255) NOT NULL,
-  `section_id` varchar(64) DEFAULT NULL,
-  `photo_path` varchar(500) DEFAULT NULL,
-  `cover_photo_path` varchar(500) DEFAULT NULL,
-  `description` text DEFAULT NULL,
-  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`),
-  KEY `section_id` (`section_id`),
-  CONSTRAINT `tour_stops_ibfk_1` FOREIGN KEY (`section_id`) REFERENCES `tour_sections` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `admins`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;

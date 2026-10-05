@@ -60,10 +60,8 @@ class MY_Controller extends CI_Controller
     }
 
     // Reads either a JSON request body or standard form-encoded POST
-    // data, whichever was actually sent. See TourSections_API's
-    // original version of this for the full reasoning — moved here so
-    // every controller shares one copy instead of each re-implementing
-    // it.
+    // data, whichever was actually sent. Lives here so every controller
+    // shares one copy instead of each re-implementing it.
     protected function getInput()
     {
         $raw = file_get_contents('php://input');

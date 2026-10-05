@@ -3,15 +3,14 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 // The links between neighbouring panoramas: an edge table with one row per
 // direction, each carrying its own yaw and pitch, since the angle to walk
-// differs depending on which way you go. Nodes and tour stops both work
-// this way and differ only in which table holds the edges and what its
-// owner column is called ("node_id" vs "tour_stop_id"), so both models
-// hand those two names to one of these and delegate.
+// differs depending on which way you go. A model using this hands over
+// which table holds the edges and what its owner column is called
+// ("node_id") and delegates the rest.
 //
 // Queries go through the CodeIgniter query builder passed in; a recording
-// fake stands in for it in tests. Behaviour is exactly what the two models
-// each did before, including that link() writes its two rows without a
-// transaction and does not check either insert.
+// fake stands in for it in tests. Behaviour is exactly what the model did
+// before, including that link() writes its two rows without a transaction
+// and does not check either insert.
 class Neighbor_links
 {
     private $db;

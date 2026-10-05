@@ -2,9 +2,9 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 // The simplest resource left — no graph, no nested children, just flat
-// fields. Same slugify-based id generation as tour_sections/tour_stops
-// for consistency, though buildings are a small, deliberately-managed
-// set rather than something created frequently.
+// fields. Ids are generated from a slugify of the name, though buildings
+// are a small, deliberately-managed set rather than something created
+// frequently.
 class Buildings_Model extends CI_Model
 {
     private $table = 'buildings';
