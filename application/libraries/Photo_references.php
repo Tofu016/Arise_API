@@ -25,6 +25,7 @@ class Photo_references
         'nodes' => array('photo_path'),
         'tour_stops' => array('photo_path', 'cover_photo_path'),
         'placard_dialogs' => array('photo_path', 'photo_360_path'),
+        'placard_photos' => array('photo_path'),
         'tour_sections' => array('cover_photo_path'),
         'signage_slides' => array('media_path'),
     );

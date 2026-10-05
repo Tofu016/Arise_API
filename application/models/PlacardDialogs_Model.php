@@ -23,10 +23,12 @@ class PlacardDialogs_Model extends CI_Model
     {
         $rows = $this->_getDialogRows();
         $termsByDialog = $this->_getSearchTermsGrouped();
+        $photosByDialog = $this->_getExtraPhotosGrouped();
 
         foreach ($rows as &$row) {
             $id = $row['id'];
             $row['search_terms'] = isset($termsByDialog[$id]) ? $termsByDialog[$id] : array();
+            $row['extra_photos'] = isset($photosByDialog[$id]) ? $photosByDialog[$id] : array();
         }
         unset($row);
 
@@ -45,6 +47,8 @@ class PlacardDialogs_Model extends CI_Model
 
         $termsByDialog = $this->_getSearchTermsGrouped($id);
         $row['search_terms'] = isset($termsByDialog[$id]) ? $termsByDialog[$id] : array();
+        $photosByDialog = $this->_getExtraPhotosGrouped($id);
+        $row['extra_photos'] = isset($photosByDialog[$id]) ? $photosByDialog[$id] : array();
         return $row;
     }
 
@@ -75,6 +79,31 @@ class PlacardDialogs_Model extends CI_Model
         return $grouped;
     }
 
+    // Photos in display order, each { path, thumb_x, thumb_y }: the square
+    // thumbnail's focus as object-position percentages (50/50 = centered). These are the photos after the main
+    // one (photo_path), which stays a plain column so the mobile app keeps
+    // reading a single photo.
+    private function _getExtraPhotosGrouped($onlyDialogId = null)
+    {
+        $this->db->select('placard_dialog_id, photo_path, thumb_x, thumb_y');
+        $this->db->from('placard_photos');
+        if ($onlyDialogId !== null) {
+            $this->db->where('placard_dialog_id', $onlyDialogId);
+        }
+        $this->db->order_by('sort_order', 'ASC');
+        $this->db->order_by('id', 'ASC');
+
+        $grouped = array();
+        foreach ($this->db->get()->result_array() as $row) {
+            $grouped[$row['placard_dialog_id']][] = array(
+                'path' => $row['photo_path'],
+                'thumb_x' => (int) $row['thumb_x'],
+                'thumb_y' => (int) $row['thumb_y'],
+            );
+        }
+        return $grouped;
+    }
+
     // $excludeId lets update() check "is this name taken by a DIFFERENT
     // row" without flagging the row's own current name as a conflict
     // with itself.
@@ -89,7 +118,7 @@ class PlacardDialogs_Model extends CI_Model
         return $this->db->get()->num_rows() > 0;
     }
 
-    public function create($roomName, $data, $searchTerms = array())
+    public function create($roomName, $data, $searchTerms = array(), $extraPhotos = array())
     {
         $now = date('Y-m-d H:i:s');
         $data['room_name'] = trim($roomName);
@@ -100,6 +129,7 @@ class PlacardDialogs_Model extends CI_Model
         $id = $this->db->insert_id();
 
         $this->_insertSearchTerms($id, $searchTerms);
+        $this->_replaceExtraPhotos($id, $extraPhotos);
 
         return $this->find($id);
     }
@@ -107,7 +137,7 @@ class PlacardDialogs_Model extends CI_Model
     // $searchTerms: null leaves them untouched, an array (including
     // empty) replaces the full set — same convention as
     // TourStops_Model::updateMarker's photo handling.
-    public function update($id, $data, $searchTerms = null)
+    public function update($id, $data, $searchTerms = null, $extraPhotos = null)
     {
         if (!empty($data)) {
             $data['updated_at'] = date('Y-m-d H:i:s');
@@ -121,14 +151,46 @@ class PlacardDialogs_Model extends CI_Model
             $this->_insertSearchTerms($id, $searchTerms);
         }
 
+        // Same null-vs-array convention as $searchTerms.
+        if ($extraPhotos !== null) {
+            $this->_replaceExtraPhotos($id, $extraPhotos);
+        }
+
         return $this->find($id);
     }
 
     public function delete($id)
     {
-        // placard_search_terms cascades via its own foreign key.
+        // placard_search_terms and placard_photos cascade via its own foreign key.
         $this->db->where('id', $id);
         return $this->db->delete($this->table);
+    }
+
+    private function _replaceExtraPhotos($dialogId, $paths)
+    {
+        $this->db->where('placard_dialog_id', $dialogId);
+        $this->db->delete('placard_photos');
+
+        $order = 0;
+        foreach ($paths as $item) {
+            // A bare path string is accepted as a photo with a centered thumbnail.
+            $path = is_array($item) ? (isset($item['path']) ? $item['path'] : '') : $item;
+            if (!is_string($path) || trim($path) === '') {
+                continue;
+            }
+            $this->db->insert('placard_photos', array(
+                'placard_dialog_id' => $dialogId,
+                'photo_path' => trim($path),
+                'thumb_x' => is_array($item) ? self::clampPercent(isset($item['thumb_x']) ? $item['thumb_x'] : 50) : 50,
+                'thumb_y' => is_array($item) ? self::clampPercent(isset($item['thumb_y']) ? $item['thumb_y'] : 50) : 50,
+                'sort_order' => $order++,
+            ));
+        }
+    }
+
+    public static function clampPercent($value)
+    {
+        return max(0, min(100, (int) round((float) $value)));
     }
 
     private function _insertSearchTerms($dialogId, $terms)
