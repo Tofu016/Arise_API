@@ -232,7 +232,7 @@ class Analytics_Model extends CI_Model
     // gets the full sequence.
     public function funnel($filters)
     {
-        $isWeb = isset($filters['platform']) && $filters['platform'] === 'web';
+        $isWeb = isset($filters['platform']) && in_array($filters['platform'], array('web', 'mobile'), true);
         $stages = $isWeb ? array('exploring', 'feedback') : array('start', 'campus', 'building', 'floor', 'exploring', 'feedback');
         // filtersFromQuery() always sets the key (null when absent), so an
         // array union (+) would never apply this default.
@@ -419,7 +419,7 @@ class Analytics_Model extends CI_Model
         $this->db->select('analytics_sessions.id, MAX(analytics_events.created_at) AS last_event_at, analytics_sessions.started_at');
         $this->db->from($this->sessions);
         $this->db->join($this->events, "{$this->events}.session_id = {$this->sessions}.id", 'left');
-        $this->db->where('analytics_sessions.platform', 'web');
+        $this->db->where_in('analytics_sessions.platform', array('web', 'mobile'));
         $this->db->where('analytics_sessions.ended_at', null);
         $this->db->group_by('analytics_sessions.id');
         $rows = $this->db->get()->result_array();

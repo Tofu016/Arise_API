@@ -599,6 +599,16 @@ Existing `kiosk` rows keep that value even though they predate pairing, so
 the dashboard's kiosk figures include them until you delete or reclassify
 them by hand.
 
+**Analytics platform `mobile`** — the mobile app's sessions. Purely additive;
+run `migrations/2026-10-13_analytics_mobile_platform.sql` (or the one-liner
+below). Until it is applied a mobile session is silently not recorded (the
+insert is rejected and the app ignores the failure); the web and kiosk are
+unaffected, and either order of deploying the app and the API is safe.
+
+```sql
+ALTER TABLE analytics_sessions MODIFY platform enum('kiosk','web','mobile') NOT NULL;
+```
+
 **Admins only, no email** — turns `users` into `admins` (no `role` column,
 non-admin accounts deleted), renames `auth_tokens.user_id` to `admin_id`,
 and drops `saved_rooms`, `password_resets` and `email_queue`. Not

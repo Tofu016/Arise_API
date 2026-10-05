@@ -31,14 +31,14 @@ class Analytics_API extends MY_Controller
 
     // POST /Analytics_API/track — public, no auth (same reasoning as
     // Feedback_API::submit: a kiosk visitor has no account). Body:
-    //   { session_id, kiosk_token?, has_gate?, campus?, building?,
+    //   { session_id, kiosk_token?, client?: 'mobile', has_gate?, campus?, building?,
     //     events: [{ type, stage?, node_id?, from_node_id?, to_node_id?,
     //                room_query?, matched?, move_kind?, feedback_id?,
     //                reason? }, ...] }
     // The platform is decided here, never claimed by the client: a session
     // is "kiosk" only when kiosk_token is a paired kiosk's own token (see
-    // Kiosks_API), and "web" otherwise, including a browser that merely
-    // shows the kiosk layout. has_gate says the visitor view has the
+    // Kiosks_API), "mobile" when the mobile app says client is 'mobile', and
+    // "web" otherwise, including a browser that merely shows the kiosk layout. has_gate says the visitor view has the
     // start/campus/building/floor screens (the Compact layout), so the
     // session starts at the 'start' stage instead of already exploring.
     // Silently drops any event whose shape doesn't match instead of
@@ -71,7 +71,9 @@ class Analytics_API extends MY_Controller
 
         $kioskToken = isset($data['kiosk_token']) && is_string($data['kiosk_token']) ? $data['kiosk_token'] : '';
         $paired = $kioskToken !== '' && $this->Kiosks_Model->findByToken(Kiosk_rules::hash($kioskToken)) !== null;
-        $platform = $paired ? 'kiosk' : 'web';
+        // The mobile app has no token to prove anything with, so "mobile" is
+        // a label it claims (like has_gate); a paired kiosk's token still wins.
+        $platform = $paired ? 'kiosk' : (isset($data['client']) && $data['client'] === 'mobile' ? 'mobile' : 'web');
         $hasGate = !empty($data['has_gate']);
 
         $campus = $this->shortString($data, 'campus');

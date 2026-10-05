@@ -44,6 +44,21 @@ class AnalyticsTrackTest extends ActionTestCase
         $this->assertSame('web', $this->track(array('platform' => 'kiosk'), false)[1]);
     }
 
+    public function testTheMobileAppIsAMobileSession()
+    {
+        $this->assertSame('mobile', $this->track(array('client' => 'mobile'), false)[1]);
+    }
+
+    public function testAPairedKioskTokenBeatsTheMobileLabel()
+    {
+        $this->assertSame('kiosk', $this->track(array('client' => 'mobile', 'kiosk_token' => 'good'), true)[1]);
+    }
+
+    public function testAnUnknownClientIsAWebSession()
+    {
+        $this->assertSame('web', $this->track(array('client' => 'toaster'), false)[1]);
+    }
+
     public function testASessionWithoutAGateStartsExploring()
     {
         $this->assertFalse($this->track(array(), false)[4]);

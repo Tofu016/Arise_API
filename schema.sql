@@ -36,7 +36,7 @@ DROP TABLE IF EXISTS `analytics_sessions`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `analytics_sessions` (
   `id` char(36) NOT NULL,
-  `platform` enum('kiosk','web') NOT NULL,
+  `platform` enum('kiosk','web','mobile') NOT NULL,
   `campus` varchar(64) DEFAULT NULL,
   `building` varchar(64) DEFAULT NULL,
   `started_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -277,6 +277,16 @@ CREATE TABLE `placard_search_terms` (
   KEY `placard_dialog_id` (`placard_dialog_id`),
   KEY `idx_search_term` (`term`),
   CONSTRAINT `placard_search_terms_ibfk_1` FOREIGN KEY (`placard_dialog_id`) REFERENCES `placard_dialogs` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `directory_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `directory_settings` (
+  `id` tinyint(3) unsigned NOT NULL,
+  `config` mediumtext NOT NULL,
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `signage_settings`;
