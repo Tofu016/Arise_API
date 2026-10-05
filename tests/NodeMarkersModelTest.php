@@ -84,7 +84,7 @@ class NodeMarkersModelTest extends TestCase
 
         $this->assertSame(array(
             'id' => 1, 'type' => 'elevator', 'label' => 'Elevator A', 'yaw' => 1.0, 'pitch' => 2.0,
-            'elevator_id' => 'e1', 'accessible_floors' => array(-1, 1, 2, 3, 5),
+            'elevator_id' => 'e1', 'accessible_floors' => array(-1, 1, 2, 3, 5), 'landings' => array(),
         ), $markers[0]);
     }
 
@@ -96,7 +96,7 @@ class NodeMarkersModelTest extends TestCase
 
         $this->assertSame(array(
             'id' => 1, 'type' => 'room', 'label' => 'Room 101', 'yaw' => 1.0, 'pitch' => 2.0,
-            'elevator_id' => null, 'accessible_floors' => array(),
+            'elevator_id' => null, 'accessible_floors' => array(), 'landings' => array(),
         ), $markers[0]);
     }
 
@@ -108,5 +108,52 @@ class NodeMarkersModelTest extends TestCase
         ));
 
         $this->assertSame(array('Here'), array_column($markers, 'label'));
+    }
+
+    public function testAnEmergencyExitMarkerReadsItsLandingsLowestFloorFirst()
+    {
+        $model = $this->model(array(
+            'nodes' => array(
+                array('id' => 'a', 'floor' => 3), array('id' => 'z_low', 'floor' => 1), array('id' => 'b_mid', 'floor' => 2), array('id' => 'a_low', 'floor' => 1),
+            ),
+            'node_markers' => array(
+                array('id' => 1, 'node_id' => 'a', 'type' => 'emergency_exit', 'label' => 'Emergency Exit', 'yaw' => 1.0, 'pitch' => 2.0, 'elevator_id' => null),
+            ),
+            'node_marker_landings' => array(
+                array('id' => 1, 'marker_id' => 1, 'landing_node_id' => 'b_mid'),
+                array('id' => 2, 'marker_id' => 1, 'landing_node_id' => 'z_low'),
+                array('id' => 3, 'marker_id' => 1, 'landing_node_id' => 'a_low'),
+            ),
+        ));
+
+        $this->assertSame(array('a_low', 'z_low', 'b_mid'), $model->find('a')['markers'][0]['landings']);
+    }
+
+    public function testSettingLandingsReplacesTheWholeList()
+    {
+        $model = $this->model(array(
+            'node_marker_landings' => array(array('id' => 1, 'marker_id' => 1, 'landing_node_id' => 'b')),
+        ));
+
+        $model->setMarkerLandings(1, array('c', 'c'));
+
+        $this->assertSame(array(
+            array('where', 'marker_id', 1),
+            array('delete', 'node_marker_landings'),
+            array('insert', 'node_marker_landings', array('marker_id' => 1, 'landing_node_id' => 'c')),
+        ), $model->db->log);
+    }
+
+    public function testLandingPairsCoverBothTheMarkerNodeAndTheLandingNode()
+    {
+        $model = $this->model(array(
+            'nodes' => array(array('id' => 'a', 'floor' => 3), array('id' => 'b', 'floor' => 2)),
+            'node_markers' => array(array('id' => 1, 'node_id' => 'a', 'type' => 'emergency_exit', 'label' => 'E', 'yaw' => 0.0, 'pitch' => 0.0, 'elevator_id' => null)),
+            'node_marker_landings' => array(array('id' => 1, 'marker_id' => 1, 'landing_node_id' => 'b')),
+        ));
+
+        $expected = array(array('source_id' => 'a', 'landing_id' => 'b'));
+        $this->assertSame($expected, $model->landingPairsInvolving('a'));
+        $this->assertSame($expected, $model->landingPairsInvolving('b'));
     }
 }

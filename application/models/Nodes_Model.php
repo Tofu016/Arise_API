@@ -12,6 +12,9 @@ require_once APPPATH . 'models/Elevators_Model.php';
 //    emergency_exit/fire_extinguisher/elevator) — an
 //    invalid value here would otherwise surface as a raw MySQL error,
 //    so it's validated explicitly before ever reaching the database
+//  - an emergency_exit marker is what makes a node a fire exit node: its
+//    landing nodes (node_marker_landings) are where the hidden fire stairs
+//    come out, used only by Nearest Exit routing
 //  - node_rooms: a separate, simple one-to-many list of room names —
 //    a loose, name-based reference (no FK to placard_dialogs), matching
 //    the original: a node can list a room name before that room's own
@@ -54,7 +57,6 @@ class Nodes_Model extends CI_Model
             $node['neighbors'] = isset($neighborsByNode[$id]) ? $neighborsByNode[$id] : array();
             $node['markers'] = isset($markersByNode[$id]) ? $markersByNode[$id] : array();
             $node['rooms'] = isset($roomsByNode[$id]) ? $roomsByNode[$id] : array();
-            $node['leads_to_floors'] = Elevators_Model::parseFloors(isset($node['leads_to_floors']) ? $node['leads_to_floors'] : null);
         }
         unset($node);
 
@@ -77,7 +79,6 @@ class Nodes_Model extends CI_Model
         $row['neighbors'] = isset($neighborsByNode[$id]) ? $neighborsByNode[$id] : array();
         $row['markers'] = isset($markersByNode[$id]) ? $markersByNode[$id] : array();
         $row['rooms'] = isset($roomsByNode[$id]) ? $roomsByNode[$id] : array();
-        $row['leads_to_floors'] = Elevators_Model::parseFloors(isset($row['leads_to_floors']) ? $row['leads_to_floors'] : null);
 
         return $row;
     }
@@ -106,7 +107,9 @@ class Nodes_Model extends CI_Model
 
     // An elevator marker's label and floors are joined in from `elevators`
     // on every read rather than copied onto the marker, so all landings of
-    // one elevator always agree.
+    // one elevator always agree. An emergency exit marker carries its landing
+    // node ids, lowest floor first, so a client reads the order a router
+    // prefers.
     private function _getMarkersGrouped($onlyNodeId = null)
     {
         $this->db->select('node_markers.*, elevators.label AS elevator_label, elevators.accessible_floors AS elevator_floors');
@@ -116,6 +119,8 @@ class Nodes_Model extends CI_Model
             $this->db->where('node_markers.node_id', $onlyNodeId);
         }
         $rows = $this->db->get()->result_array();
+
+        $landings = $this->_getLandingsGrouped(array_column($rows, 'id'));
 
         $grouped = array();
         foreach ($rows as $row) {
@@ -128,7 +133,45 @@ class Nodes_Model extends CI_Model
                 'pitch' => $row['pitch'],
                 'elevator_id' => $row['elevator_id'],
                 'accessible_floors' => $isElevator ? Elevators_Model::parseFloors($row['elevator_floors']) : array(),
+                'landings' => isset($landings[$row['id']]) ? $landings[$row['id']] : array(),
             );
+        }
+        return $grouped;
+    }
+
+    // marker id -> landing node ids, lowest floor first (then id, so the
+    // order never changes between two reads). Plain queries rather than a
+    // join, so the in-memory test database can run them too.
+    private function _getLandingsGrouped(array $markerIds)
+    {
+        if (empty($markerIds)) {
+            return array();
+        }
+        $this->db->select('marker_id, landing_node_id');
+        $this->db->from('node_marker_landings');
+        $this->db->where_in('marker_id', $markerIds);
+        $rows = $this->db->get()->result_array();
+        if (empty($rows)) {
+            return array();
+        }
+
+        $this->db->select('id, floor');
+        $this->db->from($this->table);
+        $this->db->where_in('id', array_values(array_unique(array_column($rows, 'landing_node_id'))));
+        $floors = array();
+        foreach ($this->db->get()->result_array() as $node) {
+            $floors[$node['id']] = (int) $node['floor'];
+        }
+
+        usort($rows, function ($a, $b) use ($floors) {
+            $fa = isset($floors[$a['landing_node_id']]) ? $floors[$a['landing_node_id']] : 0;
+            $fb = isset($floors[$b['landing_node_id']]) ? $floors[$b['landing_node_id']] : 0;
+            return $fa === $fb ? strcmp($a['landing_node_id'], $b['landing_node_id']) : $fa - $fb;
+        });
+
+        $grouped = array();
+        foreach ($rows as $row) {
+            $grouped[$row['marker_id']][] = $row['landing_node_id'];
         }
         return $grouped;
     }
@@ -193,7 +236,7 @@ class Nodes_Model extends CI_Model
     // before saving, and NodeEditorPage.jsx selects that exact id
     // immediately after creating, without waiting for a server response
     // — same reasoning and contract as TourStops_Model::create.
-    public function create($name, $building, $floor, $type, $photoPath = null, $requestedId = null, array $leadsToFloors = array())
+    public function create($name, $building, $floor, $type, $photoPath = null, $requestedId = null)
     {
         $id = !empty($requestedId) ? $requestedId : $this->generateUniqueId($building, $floor, $type);
         $now = date('Y-m-d H:i:s');
@@ -209,9 +252,6 @@ class Nodes_Model extends CI_Model
         );
         if (!empty($photoPath)) {
             $data['photo_path'] = $photoPath;
-        }
-        if (!empty($leadsToFloors)) {
-            $data['leads_to_floors'] = Elevators_Model::joinFloors($leadsToFloors);
         }
 
         $this->db->insert($this->table, $data);
@@ -259,9 +299,6 @@ class Nodes_Model extends CI_Model
 
     public function update($id, $data)
     {
-        if (array_key_exists('leads_to_floors', $data)) {
-            $data['leads_to_floors'] = empty($data['leads_to_floors']) ? null : Elevators_Model::joinFloors($data['leads_to_floors']);
-        }
         $data['updated_at'] = date('Y-m-d H:i:s');
         $this->db->where('id', $id);
         $this->db->update($this->table, $data);
@@ -298,8 +335,9 @@ class Nodes_Model extends CI_Model
 
     public function delete($id)
     {
-        // Neighbors (both directions), markers, and rooms all
-        // cascade-delete via the schema's own foreign keys.
+        // Neighbors (both directions), markers, rooms, and any emergency
+        // exit landing pointing here all cascade-delete via the schema's own
+        // foreign keys.
         $this->db->where('id', $id);
         return $this->db->delete($this->table);
     }
@@ -337,7 +375,8 @@ class Nodes_Model extends CI_Model
         return in_array($type, $this->allowedMarkerTypes, true);
     }
 
-    // The raw row (stored label, elevator_id), or null.
+    // The raw row (stored label, elevator_id), or null. Landings are read
+    // separately (see markerLandingIds).
     public function findMarker($markerId)
     {
         $this->db->select('*');
@@ -374,6 +413,70 @@ class Nodes_Model extends CI_Model
     {
         $this->db->where('id', $markerId);
         return $this->db->delete('node_markers');
+    }
+
+    // ---------- Emergency exit landings ----------
+
+    public function markerLandingIds($markerId)
+    {
+        $this->db->select('landing_node_id');
+        $this->db->from('node_marker_landings');
+        $this->db->where('marker_id', $markerId);
+        $ids = array();
+        foreach ($this->db->get()->result_array() as $row) {
+            $ids[] = $row['landing_node_id'];
+        }
+        return $ids;
+    }
+
+    // Replaces the whole landing list: the admin form always sends the list
+    // as it should end up, so there is no add/remove pair to get out of step.
+    public function setMarkerLandings($markerId, array $nodeIds)
+    {
+        $this->db->where('marker_id', $markerId);
+        $this->db->delete('node_marker_landings');
+        foreach (array_values(array_unique($nodeIds)) as $nodeId) {
+            $this->db->insert('node_marker_landings', array('marker_id' => $markerId, 'landing_node_id' => $nodeId));
+        }
+    }
+
+    // Every (source node, landing node) pair across all emergency exit
+    // markers that involve $nodeId, either as the node carrying the marker
+    // or as a landing target. Used to refuse a floor or building change that
+    // would leave a landing on its own floor or in another building.
+    public function landingPairsInvolving($nodeId)
+    {
+        $this->db->select('id');
+        $this->db->from('node_markers');
+        $this->db->where('node_id', $nodeId);
+        $ownMarkerIds = array_column($this->db->get()->result_array(), 'id');
+
+        $pairs = array();
+        if (!empty($ownMarkerIds)) {
+            $this->db->select('marker_id, landing_node_id');
+            $this->db->from('node_marker_landings');
+            $this->db->where_in('marker_id', $ownMarkerIds);
+            foreach ($this->db->get()->result_array() as $row) {
+                $pairs[] = array('source_id' => $nodeId, 'landing_id' => $row['landing_node_id']);
+            }
+        }
+
+        $this->db->select('marker_id, landing_node_id');
+        $this->db->from('node_marker_landings');
+        $this->db->where('landing_node_id', $nodeId);
+        $pointingHere = $this->db->get()->result_array();
+        if (!empty($pointingHere)) {
+            $this->db->select('id, node_id');
+            $this->db->from('node_markers');
+            $this->db->where_in('id', array_column($pointingHere, 'marker_id'));
+            $sourceOf = array_column($this->db->get()->result_array(), 'node_id', 'id');
+            foreach ($pointingHere as $row) {
+                if (isset($sourceOf[$row['marker_id']])) {
+                    $pairs[] = array('source_id' => $sourceOf[$row['marker_id']], 'landing_id' => $nodeId);
+                }
+            }
+        }
+        return $pairs;
     }
 
     // ---------- Rooms served (loose name references) ----------

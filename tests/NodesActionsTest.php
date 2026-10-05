@@ -174,6 +174,29 @@ class NodesActionsTest extends ActionTestCase
                 $this->models(), 400, 'Missing field: label',
             ),
 
+            // addMarker: emergency exit markers and their landings
+            'addMarker: emergency exit needs no label and no landings' => array(
+                'addMarker', array(), array('node_id' => 'a', 'type' => 'emergency_exit', 'yaw' => 1, 'pitch' => 2),
+                $this->models(array('isValidMarkerType' => true)), 200, null,
+            ),
+            'addMarker: landings must be a list' => array(
+                'addMarker', array(), array('node_id' => 'a', 'type' => 'emergency_exit', 'yaw' => 1, 'pitch' => 2, 'landings' => 'b'),
+                $this->models(array('isValidMarkerType' => true)), 400, 'landings must be a list of node ids.',
+            ),
+            'addMarker: landing on a missing marker node' => array(
+                'addMarker', array(), array('node_id' => 'a', 'type' => 'emergency_exit', 'yaw' => 1, 'pitch' => 2, 'landings' => array('b')),
+                $this->models(array('isValidMarkerType' => true, 'find' => null)), 400, "Node 'a' does not exist.",
+            ),
+            'addMarker: a node cannot be its own landing' => array(
+                'addMarker', array(), array('node_id' => 'a', 'type' => 'emergency_exit', 'yaw' => 1, 'pitch' => 2, 'landings' => array('a')),
+                $this->models(array('isValidMarkerType' => true, 'find' => self::node('gd1', 2))), 400,
+                "Landing node 'a' is not valid: a node cannot be its own landing.",
+            ),
+            'addMarker: landings only apply to emergency exit markers' => array(
+                'addMarker', array(), array_merge($marker, array('landings' => array('b'))),
+                $this->models(array('isValidMarkerType' => true)), 400, 'landings only apply to emergency exit markers.',
+            ),
+
             // updateMarker: a bad type is reported before "no valid fields"
             'updateMarker: no id' => array('updateMarker', array(), array('label' => 'x'), $this->models(), 400, 'Missing marker id.'),
             'updateMarker: empty body' => array('updateMarker', array('7'), array(), $this->models(), 400, $noFields),
@@ -228,7 +251,10 @@ class NodesActionsTest extends ActionTestCase
     {
         $this->call('NodesApiHarness', 'update', array('a'), array('name' => 'X', 'id' => 'hijack', 'bogus' => 1, 'floor' => 2));
 
-        $this->assertSame(array('name' => 'X', 'floor' => 2), $this->controller->Nodes_Model->calls[0][1][1]);
+        $update = array_values(array_filter($this->controller->Nodes_Model->calls, function ($call) {
+            return $call[0] === 'update';
+        }));
+        $this->assertSame(array('name' => 'X', 'floor' => 2), $update[0][1][1]);
     }
 
     private function addElevatorMarker(array $extra)

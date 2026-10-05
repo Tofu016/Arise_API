@@ -741,3 +741,23 @@ the code.
   SSH if available — otherwise commit `vendor/` on a branch as a fallback.
 - **Regenerating `schema.sql`** after a local schema change: the command
   is in the header of `schema.sql` itself.
+
+**Emergency Exit markers replace the Fire Exit node type and `leads_to_floors`** (2026-10-10, not
+additive): a fire exit node is now a node carrying an `emergency_exit` marker, and the marker lists
+where its hidden fire stairs come out in the new `node_marker_landings` table (one directed row per
+landing; `Nodes_API addMarker/updateMarker` take `landings`, an array of node ids, and `getAll` returns
+each marker's `landings`, lowest floor first). The migration creates that table, deletes the old
+`emergency_exit` markers (the "Assembly Point" signs the mobile app used to look for: Nearest Exit now
+uses ticked Emergency Exit Destination Points), turns every `fire_exit` node into the type its id names
+(hallway if it names none), adds a marker to each with its cross-floor neighbor links as landings (those
+links are removed so ordinary directions cannot take the fire stairs), and drops `nodes.leads_to_floors`.
+It prints what it is about to convert first. Take a backup, deploy the API with it, and deploy the web
+and mobile builds together: the old builds read `leads_to_floors` and the `fire_exit` type.
+
+```bash
+mysqldump -u arise -p arise_web > backup-before-emergency-exit-markers.sql
+mysql -u arise -p arise_web < migrations/2026-10-10_emergency_exit_markers.sql
+```
+
+Converted fire doors get a marker at yaw 0 and pitch 0 and no landings: place them in the Virtual Map
+Navigation Editor. Emergency Coverage lists every marker that leads nowhere.

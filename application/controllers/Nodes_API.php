@@ -11,7 +11,9 @@ require_once APPPATH . 'libraries/Neighbor_actions.php';
 // type against the schema's real ENUM before inserting — both to turn
 // what would otherwise be a raw SQL error into a clear message. Elevator
 // markers are landings of a row in `elevators` (see Elevators_API) and
-// are checked against it before they're written.
+// are checked against it before they're written. An emergency exit marker
+// lists its landing nodes (where the hidden fire stairs come out), which
+// are checked the same way.
 class Nodes_API extends MY_Controller
 {
     use Neighbor_actions;
@@ -33,8 +35,8 @@ class Nodes_API extends MY_Controller
     }
 
     // POST /Nodes_API/create — admin only.
-    // Body: name, building, floor, type (all required), photo_path, id,
-    // leads_to_floors (all optional). Accepts a client-provided id — see
+    // Body: name, building, floor, type (all required), photo_path, id
+    // (optional). Accepts a client-provided id — see
     // Nodes_Model::create's own comment for why.
     public function create()
     {
@@ -61,19 +63,13 @@ class Nodes_API extends MY_Controller
 
         $this->requirePhotoPathIn(isset($data['photo_path']) ? $data['photo_path'] : null, 'panoramas');
 
-        $leadsToFloors = $this->parseLeadsToFloors(isset($data['leads_to_floors']) ? $data['leads_to_floors'] : null);
-        if ($leadsToFloors === null) {
-            return Api_response::fail(400, 'leads_to_floors must be a list of distinct whole-number floors.');
-        }
-
         $node = $this->Nodes_Model->create(
             $name,
             $building,
             $floor,
             $type,
             isset($data['photo_path']) ? $data['photo_path'] : null,
-            $requestedId,
-            $leadsToFloors
+            $requestedId
         );
 
         return Api_response::ok(array('node' => $node));
@@ -109,7 +105,7 @@ class Nodes_API extends MY_Controller
         $data = $this->getInput();
         $allowed = array(
             'name', 'building', 'floor', 'type', 'photo_path',
-            'leads_to_floors', 'flowchart_position_x', 'flowchart_position_y', 'is_starting_node',
+            'flowchart_position_x', 'flowchart_position_y', 'is_starting_node',
             'starting_view_yaw', 'starting_view_pitch', 'is_campus_entrance', 'is_building_entrance',
             'is_emergency_destination',
         );
@@ -131,16 +127,11 @@ class Nodes_API extends MY_Controller
             }
         }
 
-        if (array_key_exists('leads_to_floors', $patch)) {
-            $leadsToFloors = $this->parseLeadsToFloors($patch['leads_to_floors']);
-            if ($leadsToFloors === null) {
-                return Api_response::fail(400, 'leads_to_floors must be a list of distinct whole-number floors.');
-            }
-            $patch['leads_to_floors'] = $leadsToFloors;
-        }
-
         if (isset($patch['floor']) || isset($patch['building'])) {
             $conflict = $this->landingConflict($id, $patch);
+            if ($conflict === null) {
+                $conflict = $this->emergencyLandingConflict($id, $patch);
+            }
             if ($conflict !== null) {
                 return Api_response::fail(409, $conflict);
             }
@@ -148,41 +139,6 @@ class Nodes_API extends MY_Controller
 
         $node = $this->Nodes_Model->update($id, $patch);
         return Api_response::ok(array('node' => $node));
-    }
-
-    // A JSON array or a comma string -> distinct, sorted ints, or an empty
-    // array for null/""/[] (leads_to_floors is optional, unlike an
-    // elevator's accessible_floors — a node isn't required to be a stairs
-    // node at all, and even a stairs node's floors are only enforced
-    // client-side). Returns null only when the input isn't a list of whole
-    // numbers at all.
-    private function parseLeadsToFloors($raw)
-    {
-        if ($raw === null || $raw === '') {
-            return array();
-        }
-        if (is_string($raw)) {
-            $raw = explode(',', $raw);
-        }
-        if (!is_array($raw)) {
-            return null;
-        }
-
-        $floors = array();
-        foreach ($raw as $floor) {
-            $floor = is_string($floor) ? trim($floor) : $floor;
-            if ($floor === '') {
-                continue;
-            }
-            if (is_int($floor) || (is_string($floor) && preg_match('/^-?\d+$/', $floor))) {
-                $floors[] = (int) $floor;
-            } else {
-                return null;
-            }
-        }
-        $floors = array_values(array_unique($floors));
-        sort($floors);
-        return $floors;
     }
 
     // Moving a node moves any elevator landing on it, which must stay in
@@ -210,6 +166,87 @@ class Nodes_API extends MY_Controller
             }
         }
         return null;
+    }
+
+    // Moving a node must not break an emergency exit landing it takes part in,
+    // whether it carries the marker or is the landing: a landing has to stay
+    // in the same building and on a different floor from its marker's node.
+    // Returns the reason it can't, or null.
+    private function emergencyLandingConflict($nodeId, array $patch)
+    {
+        $pairs = $this->Nodes_Model->landingPairsInvolving($nodeId) ?: array();
+        foreach ($pairs as $pair) {
+            $source = $this->Nodes_Model->find($pair['source_id']);
+            $landing = $this->Nodes_Model->find($pair['landing_id']);
+            if (!$source || !$landing) {
+                continue;
+            }
+            foreach (array('building', 'floor') as $field) {
+                if (isset($patch[$field])) {
+                    if ($source['id'] === $nodeId) {
+                        $source[$field] = $patch[$field];
+                    }
+                    if ($landing['id'] === $nodeId) {
+                        $landing[$field] = $patch[$field];
+                    }
+                }
+            }
+            $reason = $this->landingProblem($source, $landing);
+            if ($reason !== null) {
+                return "An emergency exit landing involves this node ({$pair['source_id']} to {$pair['landing_id']}): {$reason} Remove that landing first.";
+            }
+        }
+        return null;
+    }
+
+    // Why `$landing` can't be an exit landing of a marker on `$source`, or null.
+    private function landingProblem(array $source, array $landing)
+    {
+        if ($source['id'] === $landing['id']) {
+            return 'a node cannot be its own landing.';
+        }
+        if ($source['building'] !== $landing['building']) {
+            return "the landing is in building '{$landing['building']}', not '{$source['building']}'.";
+        }
+        if ((int) $source['floor'] === (int) $landing['floor']) {
+            return 'a landing must be on a different floor.';
+        }
+        return null;
+    }
+
+    // The landing list of an emergency exit marker on `$nodeId`: an array of
+    // node ids, each an existing node in the same building on another floor.
+    // Returns the cleaned list, or aborts with the reply.
+    private function requireValidLandings($nodeId, $raw)
+    {
+        if ($raw === null || $raw === '') {
+            return array();
+        }
+        if (!is_array($raw)) {
+            throw new Api_abort(Api_response::fail(400, 'landings must be a list of node ids.'));
+        }
+        $source = $this->Nodes_Model->find($nodeId);
+        if (!$source) {
+            throw new Api_abort(Api_response::fail(400, "Node '{$nodeId}' does not exist."));
+        }
+
+        $ids = array();
+        foreach ($raw as $landingId) {
+            $landingId = trim((string) $landingId);
+            if ($landingId === '') {
+                continue;
+            }
+            $landing = $this->Nodes_Model->find($landingId);
+            if (!$landing) {
+                throw new Api_abort(Api_response::fail(400, "Landing node '{$landingId}' does not exist."));
+            }
+            $reason = $this->landingProblem($source, $landing);
+            if ($reason !== null) {
+                throw new Api_abort(Api_response::fail(400, "Landing node '{$landingId}' is not valid: {$reason}"));
+            }
+            $ids[] = $landingId;
+        }
+        return array_values(array_unique($ids));
     }
 
     // DELETE /Nodes_API/delete/{id} — admin only.
@@ -276,15 +313,18 @@ class Nodes_API extends MY_Controller
 
     // POST /Nodes_API/addMarker — admin only.
     // Body: node_id, type (room|facility|emergency_exit|fire_extinguisher|elevator), label,
-    // yaw, pitch, and — elevator only — elevator_id. An elevator marker's
-    // label is optional: it always displays the elevator's own label.
+    // yaw, pitch, and — elevator only — elevator_id, — emergency_exit only —
+    // landings (node ids, may be empty for a fire door that is itself the way
+    // out). An elevator marker's label is optional: it always displays the
+    // elevator's own label. So is an emergency exit marker's.
     public function addMarker()
     {
         $this->requireAdmin();
 
         $data = $this->getInput();
         $isElevator = isset($data['type']) && $data['type'] === 'elevator';
-        Api_input::requirePresent($data, $isElevator
+        $isEmergencyExit = isset($data['type']) && $data['type'] === 'emergency_exit';
+        Api_input::requirePresent($data, ($isElevator || $isEmergencyExit)
             ? array('node_id', 'type', 'yaw', 'pitch')
             : array('node_id', 'type', 'label', 'yaw', 'pitch'));
 
@@ -304,6 +344,16 @@ class Nodes_API extends MY_Controller
             }
         }
 
+        $landings = array();
+        if ($isEmergencyExit) {
+            $landings = $this->requireValidLandings($data['node_id'], isset($data['landings']) ? $data['landings'] : null);
+            if ($label === null || trim((string) $label) === '') {
+                $label = 'Emergency Exit';
+            }
+        } elseif (!empty($data['landings'])) {
+            return Api_response::fail(400, 'landings only apply to emergency exit markers.');
+        }
+
         $markerId = $this->Nodes_Model->addMarker(
             $data['node_id'],
             $data['type'],
@@ -312,6 +362,9 @@ class Nodes_API extends MY_Controller
             $data['pitch'],
             $elevatorId
         );
+        if ($isEmergencyExit) {
+            $this->Nodes_Model->setMarkerLandings($markerId, $landings);
+        }
 
         return Api_response::ok(array('marker_id' => $markerId));
     }
@@ -327,7 +380,9 @@ class Nodes_API extends MY_Controller
 
         $data = $this->getInput();
         $allowed = array('type', 'label', 'yaw', 'pitch', 'elevator_id');
-        $patch = Api_input::patch($data, $allowed);
+        $hasLandings = array_key_exists('landings', $data);
+        // A landings-only edit has no column to patch, which is still a valid edit.
+        $patch = Api_input::patch($data, $allowed, $hasLandings);
 
         if (isset($patch['type']) && !$this->Nodes_Model->isValidMarkerType($patch['type'])) {
             $allowedTypes = implode(', ', $this->Nodes_Model->getAllowedMarkerTypes());
@@ -354,7 +409,40 @@ class Nodes_API extends MY_Controller
             $patch['elevator_id'] = $elevatorId;
         }
 
-        $this->Nodes_Model->updateMarker($markerId, $patch);
+        // Landings belong to emergency exit markers only: a marker changed
+        // to another type drops them, and a landing list is only accepted
+        // for one that is (or becomes) an emergency exit marker.
+        $landings = null;
+        if (isset($patch['type']) && $patch['type'] !== 'emergency_exit') {
+            if (!empty($data['landings'])) {
+                return Api_response::fail(400, 'landings only apply to emergency exit markers.');
+            }
+            $landings = array();
+        } elseif ($hasLandings) {
+            $marker = $this->Nodes_Model->findMarker($markerId);
+            if (!$marker) {
+                return Api_response::fail(404, 'Marker not found.');
+            }
+            if (!isset($patch['type']) && $marker['type'] !== 'emergency_exit') {
+                return !empty($data['landings'])
+                    ? Api_response::fail(400, 'landings only apply to emergency exit markers.')
+                    : Api_response::ok();
+            }
+            $landings = $this->requireValidLandings($marker['node_id'], $data['landings']);
+        }
+        if (isset($patch['type']) && $patch['type'] === 'emergency_exit' && array_key_exists('label', $patch) && trim((string) $patch['label']) === '') {
+            $patch['label'] = 'Emergency Exit';
+        }
+
+        if ($landings === array()) {
+            $this->Nodes_Model->setMarkerLandings($markerId, array());
+        }
+        if (!empty($patch)) {
+            $this->Nodes_Model->updateMarker($markerId, $patch);
+        }
+        if (!empty($landings)) {
+            $this->Nodes_Model->setMarkerLandings($markerId, $landings);
+        }
         return Api_response::ok();
     }
 

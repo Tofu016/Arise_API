@@ -161,6 +161,20 @@ CREATE TABLE `node_markers` (
   CONSTRAINT `node_markers_ibfk_2` FOREIGN KEY (`elevator_id`) REFERENCES `elevators` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `node_marker_landings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `node_marker_landings` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `marker_id` int(10) unsigned NOT NULL,
+  `landing_node_id` varchar(64) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_marker_landing` (`marker_id`,`landing_node_id`),
+  KEY `node_marker_landings_ibfk_2` (`landing_node_id`),
+  CONSTRAINT `node_marker_landings_ibfk_1` FOREIGN KEY (`marker_id`) REFERENCES `node_markers` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `node_marker_landings_ibfk_2` FOREIGN KEY (`landing_node_id`) REFERENCES `nodes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `node_neighbors`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -200,7 +214,6 @@ CREATE TABLE `nodes` (
   `building` varchar(64) NOT NULL,
   `floor` int(11) NOT NULL,
   `type` varchar(64) NOT NULL,
-  `leads_to_floors` varchar(255) DEFAULT NULL,
   `is_starting_node` tinyint(1) NOT NULL DEFAULT 0,
   `starting_view_yaw` float DEFAULT NULL,
   `starting_view_pitch` float DEFAULT NULL,
