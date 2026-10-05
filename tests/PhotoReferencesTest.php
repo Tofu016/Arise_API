@@ -30,7 +30,7 @@ class PhotoReferencesTest extends TestCase
     {
         $this->tables = array(
             'nodes' => array(array('photo_path' => 'panoramas/gd1/a.jpg')),
-            'placard_dialogs' => array(array('photo_path' => 'roomphoto/gd1/e.jpg', 'photo_360_path' => 'room360/gd1/f.webp')),
+            'placard_photos' => array(array('photo_path' => 'roomphoto/gd1/e.jpg'), array('photo_path' => 'room360/gd1/f.webp')),
             'signage_slides' => array(array('media_path' => 'signage/g.mp4')),
         );
 
@@ -56,7 +56,7 @@ class PhotoReferencesTest extends TestCase
     {
         $this->tables = array(
             'nodes' => array(array('photo_path' => ''), array('photo_path' => null), array('photo_path' => 'panoramas/gd1/a.jpg')),
-            'placard_dialogs' => array(array('photo_path' => 'roomphoto/gd1/e.jpg', 'photo_360_path' => '')),
+            'placard_photos' => array(array('photo_path' => 'roomphoto/gd1/e.jpg'), array('photo_path' => '')),
         );
 
         $this->assertSame(array('panoramas/gd1/a.jpg', 'roomphoto/gd1/e.jpg'), array_keys($this->store()->referencedPaths()));

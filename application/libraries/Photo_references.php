@@ -23,7 +23,6 @@ class Photo_references
     // table => the columns in it that store a Photo path.
     const SOURCES = array(
         'nodes' => array('photo_path'),
-        'placard_dialogs' => array('photo_path', 'photo_360_path'),
         'placard_photos' => array('photo_path'),
         'signage_slides' => array('media_path'),
     );

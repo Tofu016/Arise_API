@@ -27,9 +27,9 @@ class PlacardDialogs_API extends MY_Controller
 
     // POST /PlacardDialogs_API/create — admin only.
     // Body: room_name (required); description, department, use,
-    // photo_path, photo_360_path, link, search_terms, extra_photos (all optional;
-    // extra_photos is an array of {path, thumb_x, thumb_y} shown after photo_path;
-    // thumb_x/thumb_y also set the main photo's thumbnail focus)
+    // link, search_terms, photos (all optional; photos is the ordered array of
+    // {path, kind ('flat' or '360'), thumb_x, thumb_y}; thumb_x/thumb_y are a
+    // flat photo's square thumbnail focus)
     public function create()
     {
         $this->requireAdmin();
@@ -45,13 +45,13 @@ class PlacardDialogs_API extends MY_Controller
             return Api_response::fail(409, 'A room or facility with this name already exists.');
         }
 
-        $allowed = array('description', 'department', 'contact_number', 'photo_path', 'photo_360_path', 'link', 'thumb_x', 'thumb_y');
-        $fields = $this->clampThumbFocus(array_intersect_key($data, array_flip($allowed)));
+        $allowed = array('description', 'department', 'contact_number', 'link');
+        $fields = array_intersect_key($data, array_flip($allowed));
         $searchTerms = (isset($data['search_terms']) && is_array($data['search_terms'])) ? $data['search_terms'] : array();
 
-        $extraPhotos = (isset($data['extra_photos']) && is_array($data['extra_photos'])) ? $data['extra_photos'] : array();
+        $photos = (isset($data['photos']) && is_array($data['photos'])) ? $data['photos'] : array();
 
-        $dialog = $this->PlacardDialogs_Model->create($roomName, $fields, $searchTerms, $extraPhotos);
+        $dialog = $this->PlacardDialogs_Model->create($roomName, $fields, $searchTerms, $photos);
         return Api_response::ok(array('dialog' => $dialog));
     }
 
@@ -74,26 +74,14 @@ class PlacardDialogs_API extends MY_Controller
             }
         }
 
-        $allowed = array('room_name', 'description', 'department', 'contact_number', 'photo_path', 'photo_360_path', 'link', 'thumb_x', 'thumb_y');
+        $allowed = array('room_name', 'description', 'department', 'contact_number', 'link');
         $searchTerms = (isset($data['search_terms']) && is_array($data['search_terms'])) ? $data['search_terms'] : null;
-        $extraPhotos = (isset($data['extra_photos']) && is_array($data['extra_photos'])) ? $data['extra_photos'] : null;
-        // A body carrying only search_terms or extra_photos is still a change.
-        $patch = $this->clampThumbFocus(Api_input::patch($data, $allowed, $searchTerms !== null || $extraPhotos !== null));
+        $photos = (isset($data['photos']) && is_array($data['photos'])) ? $data['photos'] : null;
+        // A body carrying only search_terms or photos is still a change.
+        $patch = Api_input::patch($data, $allowed, $searchTerms !== null || $photos !== null);
 
-        $dialog = $this->PlacardDialogs_Model->update($id, $patch, $searchTerms, $extraPhotos);
+        $dialog = $this->PlacardDialogs_Model->update($id, $patch, $searchTerms, $photos);
         return Api_response::ok(array('dialog' => $dialog));
-    }
-
-    // thumb_x / thumb_y: where the main photo's square thumbnail is centered,
-    // as 0-100 object-position percentages.
-    private function clampThumbFocus($fields)
-    {
-        foreach (array('thumb_x', 'thumb_y') as $key) {
-            if (isset($fields[$key])) {
-                $fields[$key] = PlacardDialogs_Model::clampPercent($fields[$key]);
-            }
-        }
-        return $fields;
     }
 
     // DELETE /PlacardDialogs_API/delete/{id} — admin only.

@@ -23,12 +23,12 @@ class PlacardDialogs_Model extends CI_Model
     {
         $rows = $this->_getDialogRows();
         $termsByDialog = $this->_getSearchTermsGrouped();
-        $photosByDialog = $this->_getExtraPhotosGrouped();
+        $photosByDialog = $this->_getPhotosGrouped();
 
         foreach ($rows as &$row) {
             $id = $row['id'];
             $row['search_terms'] = isset($termsByDialog[$id]) ? $termsByDialog[$id] : array();
-            $row['extra_photos'] = isset($photosByDialog[$id]) ? $photosByDialog[$id] : array();
+            $this->_attachPhotos($row, isset($photosByDialog[$id]) ? $photosByDialog[$id] : array());
         }
         unset($row);
 
@@ -47,8 +47,8 @@ class PlacardDialogs_Model extends CI_Model
 
         $termsByDialog = $this->_getSearchTermsGrouped($id);
         $row['search_terms'] = isset($termsByDialog[$id]) ? $termsByDialog[$id] : array();
-        $photosByDialog = $this->_getExtraPhotosGrouped($id);
-        $row['extra_photos'] = isset($photosByDialog[$id]) ? $photosByDialog[$id] : array();
+        $photosByDialog = $this->_getPhotosGrouped($id);
+        $this->_attachPhotos($row, isset($photosByDialog[$id]) ? $photosByDialog[$id] : array());
         return $row;
     }
 
@@ -79,13 +79,28 @@ class PlacardDialogs_Model extends CI_Model
         return $grouped;
     }
 
-    // Photos in display order, each { path, thumb_x, thumb_y }: the square
-    // thumbnail's focus as object-position percentages (50/50 = centered). These are the photos after the main
-    // one (photo_path), which stays a plain column so the mobile app keeps
-    // reading a single photo.
-    private function _getExtraPhotosGrouped($onlyDialogId = null)
+    // `photos` is the room's whole ordered list. photo_path and photo_360_path
+    // are derived (first flat, first 360) because the mobile app reads them.
+    private function _attachPhotos(&$row, $photos)
     {
-        $this->db->select('placard_dialog_id, photo_path, thumb_x, thumb_y');
+        $row['photos'] = $photos;
+        $row['photo_path'] = '';
+        $row['photo_360_path'] = '';
+        foreach ($photos as $photo) {
+            if ($photo['kind'] === '360' && $row['photo_360_path'] === '') {
+                $row['photo_360_path'] = $photo['path'];
+            } elseif ($photo['kind'] === 'flat' && $row['photo_path'] === '') {
+                $row['photo_path'] = $photo['path'];
+            }
+        }
+    }
+
+    // Photos in display order, each { path, kind ('flat' or '360'), thumb_x,
+    // thumb_y }: the square thumbnail's focus as object-position percentages
+    // (50/50 = centered; only flat photos use it).
+    private function _getPhotosGrouped($onlyDialogId = null)
+    {
+        $this->db->select('placard_dialog_id, photo_path, kind, thumb_x, thumb_y');
         $this->db->from('placard_photos');
         if ($onlyDialogId !== null) {
             $this->db->where('placard_dialog_id', $onlyDialogId);
@@ -97,6 +112,7 @@ class PlacardDialogs_Model extends CI_Model
         foreach ($this->db->get()->result_array() as $row) {
             $grouped[$row['placard_dialog_id']][] = array(
                 'path' => $row['photo_path'],
+                'kind' => $row['kind'],
                 'thumb_x' => (int) $row['thumb_x'],
                 'thumb_y' => (int) $row['thumb_y'],
             );
@@ -118,7 +134,7 @@ class PlacardDialogs_Model extends CI_Model
         return $this->db->get()->num_rows() > 0;
     }
 
-    public function create($roomName, $data, $searchTerms = array(), $extraPhotos = array())
+    public function create($roomName, $data, $searchTerms = array(), $photos = array())
     {
         $now = date('Y-m-d H:i:s');
         $data['room_name'] = trim($roomName);
@@ -129,14 +145,14 @@ class PlacardDialogs_Model extends CI_Model
         $id = $this->db->insert_id();
 
         $this->_insertSearchTerms($id, $searchTerms);
-        $this->_replaceExtraPhotos($id, $extraPhotos);
+        $this->_replacePhotos($id, $photos);
 
         return $this->find($id);
     }
 
     // $searchTerms: null leaves them untouched, an array (including
     // empty) replaces the full set.
-    public function update($id, $data, $searchTerms = null, $extraPhotos = null)
+    public function update($id, $data, $searchTerms = null, $photos = null)
     {
         if (!empty($data)) {
             $data['updated_at'] = date('Y-m-d H:i:s');
@@ -151,8 +167,8 @@ class PlacardDialogs_Model extends CI_Model
         }
 
         // Same null-vs-array convention as $searchTerms.
-        if ($extraPhotos !== null) {
-            $this->_replaceExtraPhotos($id, $extraPhotos);
+        if ($photos !== null) {
+            $this->_replacePhotos($id, $photos);
         }
 
         return $this->find($id);
@@ -165,14 +181,14 @@ class PlacardDialogs_Model extends CI_Model
         return $this->db->delete($this->table);
     }
 
-    private function _replaceExtraPhotos($dialogId, $paths)
+    private function _replacePhotos($dialogId, $paths)
     {
         $this->db->where('placard_dialog_id', $dialogId);
         $this->db->delete('placard_photos');
 
         $order = 0;
         foreach ($paths as $item) {
-            // A bare path string is accepted as a photo with a centered thumbnail.
+            // A bare path string is accepted as a flat photo with a centered thumbnail.
             $path = is_array($item) ? (isset($item['path']) ? $item['path'] : '') : $item;
             if (!is_string($path) || trim($path) === '') {
                 continue;
@@ -180,6 +196,7 @@ class PlacardDialogs_Model extends CI_Model
             $this->db->insert('placard_photos', array(
                 'placard_dialog_id' => $dialogId,
                 'photo_path' => trim($path),
+                'kind' => (is_array($item) && isset($item['kind']) && $item['kind'] === '360') ? '360' : 'flat',
                 'thumb_x' => is_array($item) ? self::clampPercent(isset($item['thumb_x']) ? $item['thumb_x'] : 50) : 50,
                 'thumb_y' => is_array($item) ? self::clampPercent(isset($item['thumb_y']) ? $item['thumb_y'] : 50) : 50,
                 'sort_order' => $order++,
