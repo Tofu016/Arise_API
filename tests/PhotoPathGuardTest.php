@@ -35,7 +35,7 @@ class PhotoPathGuardTest extends ActionTestCase
         $reply = $this->call($harness, $action, $params, $body, $returns);
         $this->assertReply($reply, $status, $status === 400 ? $reply->body()['error'] : null);
         if ($status === 400) {
-            $this->assertStringContainsString('photo_path must be an uploaded photo', $reply->body()['error']);
+            $this->assertMatchesRegularExpression('/^(cover_)?photo_path must be an uploaded photo/', $reply->body()['error']);
         }
     }
 
@@ -60,6 +60,11 @@ class PhotoPathGuardTest extends ActionTestCase
             'stop update: changed to an upload' => array('TourStopsApiHarness', 'update', array('a'), array('photo_path' => 'tourpanorama/a.webp'), $stops($storedStop), 200),
             'stop update: unchanged legacy path still saves' => array('TourStopsApiHarness', 'update', array('a'), array('name' => 'X', 'photo_path' => 'legacy_a.jpg'), $stops($storedStop), 200),
             'stop update: cleared' => array('TourStopsApiHarness', 'update', array('a'), array('photo_path' => ''), $stops($storedStop), 200),
+            'stop create: cover upload' => array('TourStopsApiHarness', 'create', array(), array('name' => 'S', 'cover_photo_path' => 'tourcover/s.webp'), $stops(), 200),
+            'stop create: cover from the 360 folder refused' => array('TourStopsApiHarness', 'create', array(), array('name' => 'S', 'cover_photo_path' => 'tourpanorama/s.webp'), $stops(), 400),
+            'stop update: cover changed to an upload' => array('TourStopsApiHarness', 'update', array('a'), array('cover_photo_path' => 'tourcover/a.webp'), $stops($storedStop), 200),
+            'stop update: cover changed to a guessed name' => array('TourStopsApiHarness', 'update', array('a'), array('cover_photo_path' => 'a_cover.jpg'), $stops($storedStop), 400),
+            'stop update: cover cleared' => array('TourStopsApiHarness', 'update', array('a'), array('cover_photo_path' => ''), $stops($storedStop), 200),
 
             'node create: guessed name refused' => array('NodesApiHarness', 'create', array(), $node + array('photo_path' => 'gd1_f1_hallway01.jpg'), $nodes(), 400),
             'node create: tour photo refused' => array('NodesApiHarness', 'create', array(), $node + array('photo_path' => 'tourpanorama/x.webp'), $nodes(), 400),

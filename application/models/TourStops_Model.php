@@ -119,7 +119,7 @@ class TourStops_Model extends CI_Model
     // creating, without waiting for a server response), so this preserves
     // that same contract rather than always generating its own. Falls
     // back to auto-generation only when no id is actually provided.
-    public function create($name, $sectionId = null, $photoPath = null, $description = null, $requestedId = null)
+    public function create($name, $sectionId = null, $photoPath = null, $description = null, $requestedId = null, $coverPhotoPath = null)
     {
         $id = !empty($requestedId) ? $requestedId : $this->generateUniqueId($name);
         $now = date('Y-m-d H:i:s');
@@ -139,6 +139,9 @@ class TourStops_Model extends CI_Model
         }
         if (!empty($photoPath)) {
             $data['photo_path'] = $photoPath;
+        }
+        if (!empty($coverPhotoPath)) {
+            $data['cover_photo_path'] = $coverPhotoPath;
         }
         if (!empty($description)) {
             $data['description'] = $description;

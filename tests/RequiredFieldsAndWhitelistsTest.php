@@ -91,7 +91,7 @@ class RequiredFieldsAndWhitelistsTest extends ActionTestCase
                 'is_building_entrance' => 1, 'is_emergency_destination' => 1,
             )),
             array('NodesApiHarness', 'updateMarker', array('7'), array('type' => 'room', 'label' => 'x', 'yaw' => 1, 'pitch' => 2)),
-            array('TourStopsApiHarness', 'update', array('a'), array('name' => 'x', 'section_id' => '1', 'photo_path' => 'tourpanorama/a.jpg', 'description' => 'd')),
+            array('TourStopsApiHarness', 'update', array('a'), array('name' => 'x', 'section_id' => '1', 'photo_path' => 'tourpanorama/a.jpg', 'cover_photo_path' => 'tourcover/a.jpg', 'description' => 'd')),
             array('PlacardDialogsApiHarness', 'update', array('1'), array(
                 'room_name' => 'x', 'description' => 'd', 'department' => 'd', 'contact_number' => '(02) 8123-4567',
                 'photo_path' => 'roomphoto/gd1/a.jpg', 'photo_360_path' => 'room360/gd1/a.webp', 'link' => 'l',

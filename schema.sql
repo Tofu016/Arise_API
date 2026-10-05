@@ -321,6 +321,7 @@ CREATE TABLE `tour_stops` (
   `name` varchar(255) NOT NULL,
   `section_id` varchar(64) DEFAULT NULL,
   `photo_path` varchar(500) DEFAULT NULL,
+  `cover_photo_path` varchar(500) DEFAULT NULL,
   `description` text DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),

@@ -26,7 +26,9 @@ class TourStops_API extends MY_Controller
     }
 
     // POST /TourStops_API/create — admin only.
-    // Body: name (required), id, section_id, photo_path, description (all optional)
+    // Body: name (required), id, section_id, photo_path, cover_photo_path,
+    // description (all optional). cover_photo_path is a flat photo in
+    // tourcover/ (the scene list's thumbnail), photo_path the 360° one.
     // Accepts an optional client-provided id — TourStopForm.jsx lets the
     // admin see/edit the suggested id before saving, and TourStopsPage.jsx
     // selects that exact id immediately after creating without waiting
@@ -49,13 +51,15 @@ class TourStops_API extends MY_Controller
         }
 
         $this->requirePhotoPathIn(isset($data['photo_path']) ? $data['photo_path'] : null, 'tourpanorama');
+        $this->requirePhotoPathIn(isset($data['cover_photo_path']) ? $data['cover_photo_path'] : null, 'tourcover', 'cover_photo_path');
 
         $stop = $this->TourStops_Model->create(
             $name,
             isset($data['section_id']) ? $data['section_id'] : null,
             isset($data['photo_path']) ? $data['photo_path'] : null,
             isset($data['description']) ? $data['description'] : null,
-            $requestedId
+            $requestedId,
+            isset($data['cover_photo_path']) ? $data['cover_photo_path'] : null
         );
 
         return Api_response::ok(array('stop' => $stop));
@@ -89,7 +93,7 @@ class TourStops_API extends MY_Controller
         Api_input::requireId($id, 'stop');
 
         $data = $this->getInput();
-        $allowed = array('name', 'section_id', 'photo_path', 'description');
+        $allowed = array('name', 'section_id', 'photo_path', 'cover_photo_path', 'description');
         $patch = Api_input::patch($data, $allowed);
 
         // section_id is a foreign key — the database expects either a
@@ -106,10 +110,14 @@ class TourStops_API extends MY_Controller
         // Checked only when the photo actually changes: the admin form
         // sends every field on save, and a stop stored before this rule
         // must stay editable.
-        if (array_key_exists('photo_path', $patch)) {
+        if (array_key_exists('photo_path', $patch) || array_key_exists('cover_photo_path', $patch)) {
             $current = $this->TourStops_Model->find($id);
-            if (!$current || $patch['photo_path'] !== $current['photo_path']) {
+            if (array_key_exists('photo_path', $patch) && (!$current || $patch['photo_path'] !== $current['photo_path'])) {
                 $this->requirePhotoPathIn($patch['photo_path'], 'tourpanorama');
+            }
+            $currentCover = $current && isset($current['cover_photo_path']) ? $current['cover_photo_path'] : null;
+            if (array_key_exists('cover_photo_path', $patch) && (!$current || $patch['cover_photo_path'] !== $currentCover)) {
+                $this->requirePhotoPathIn($patch['cover_photo_path'], 'tourcover', 'cover_photo_path');
             }
         }
 
