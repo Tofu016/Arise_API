@@ -6,3 +6,13 @@
 RewriteEngine On
 RewriteCond %{HTTP:Authorization} .
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# --- deployment hardening ---
+RewriteRule (^|/)\.(?!well-known)      - [F]
+RewriteRule ^protected-uploads/       - [F]
+<FilesMatch "\.(sql|md|lock)$">
+    Require all denied
+</FilesMatch>
+# composer.json is intentionally left servable: blocking "*.json" would
+# also block /.well-known/assetlinks.json, which Android App Links needs
+# if the mobile app ships.
