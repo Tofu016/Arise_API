@@ -18,6 +18,10 @@ current: when a setting or a gap changes, change it here in the same commit.
 | `DB_USER` | a dedicated account, **not `root`** | See section 2. |
 | `DB_PASS` | a generated password | Unset or blank falls back to an empty password. |
 | `DB_NAME` | `arise_web` | |
+| `FRONTEND_URL` | `https://<web-app-host>` | Optional. Used for the password-reset link; blank falls back to the first `CORS_ORIGIN`. |
+| `EMAIL_PROTOCOL` | `smtp` | The default `mail` (PHP `mail()`) often never arrives from a server. |
+| `EMAIL_FROM`, `EMAIL_FROM_NAME` | a real sender address | Account emails (approval, password reset). |
+| `EMAIL_SMTP_HOST`, `_PORT`, `_USER`, `_PASS`, `_CRYPTO` | your mail server | Only read when `EMAIL_PROTOCOL=smtp`. |
 | `UPLOAD_ROOT` | absolute path, trailing slash | Public images (kiosk signage). |
 | `PROTECTED_UPLOAD_ROOT` | absolute path, trailing slash | Blank falls back to two directories above `index.php`, which is rarely right on a server. |
 
@@ -27,10 +31,10 @@ development value.
 
 ### Not in `.env`: edit or configure by hand
 
-- **`application/config/config.php`**: `$config['log_threshold']` is `0`,
-  which logs nothing, including the upload errors the code reports through
-  `log_message('error', …)`. Set it to `1` and keep `application/logs/`
-  writable.
+- **`application/config/config.php`**: `$config['log_threshold']` is `1`
+  (errors only), which is what you want: it records upload errors and failed
+  emails reported through `log_message('error', …)`. Keep `application/logs/`
+  writable and check it after go-live.
 - **HTTPS.** Bearer tokens travel in the `Authorization` header, so
   without TLS they cross the network readable. Serve only over HTTPS and
   add HSTS.
@@ -46,8 +50,12 @@ development value.
   and turns off directory listing and script execution there — confirm
   with `curl -I` that a photo carries `Access-Control-Allow-Origin: *`
   and that a request for `uploads/` itself is refused.
-- **Scheduled jobs** (DEPLOY.md A10, CLI only): `purgeExpired` daily,
-  `closeStaleSessions` as often as wanted.
+- **Scheduled jobs** (DEPLOY.md A10, CLI only): `purgeExpired` daily (login
+  tokens and rate-limit hits), `closeStaleSessions` as often as wanted.
+- **Email** that can actually be delivered (the `EMAIL_*` keys above), or
+  admins must be recovered with `Admins_CLI setPassword`.
+- **Every migration applied**, including `rate_limit_hits`: login, feedback and
+  analytics tracking fail without it (DEPLOY.md, Part B).
 - **Backups** of the database, `uploads/`, `protected-uploads/` and the
   server's `.env`. The last three are not in git or in a DB dump.
 - **First admin account** created from the command line (`SEED.md`).
@@ -57,11 +65,12 @@ development value.
 
 These are real, and the code does not handle them today.
 
-- **No rate limiting.** `Auth_API/login` and `Feedback_API/submit` are
-  public and unthrottled. Login can be brute-forced and feedback can flood
-  the database. Either add per-IP and per-account attempt limits in the API
-  or throttle at the web server or firewall. Until then the only defence is
-  the 8-character minimum password (`Account_policy`).
+- **Rate limiting is in the API, but only per IP, account and visitor.**
+  `Rate_limit.php` throttles login (10 failures per 15 minutes, per IP and
+  per email), registration, password reset, feedback (plus a honeypot field)
+  and analytics tracking, counted in `rate_limit_hits`. Many visitors behind
+  one campus address share the per-IP counts, and a distributed attacker is
+  not stopped. Consider also throttling at the web server or firewall.
 - **The development DB user is `root` with an empty password.** That is the
   XAMPP default and only acceptable on a developer's machine. In production
   create an account limited to `SELECT, INSERT, UPDATE, DELETE` on
@@ -71,8 +80,8 @@ These are real, and the code does not handle them today.
 - **`IndoorUploads_API/serve` is public.** Indoor photos are called
   "protected" but are streamed to anyone who knows the path. Either decide
   they are public and update the wording, or put an auth check back.
-- **One CORS origin for the API.** `CORS_ORIGIN` accepts a comma-separated
-  list, and public photos in `uploads/` allow any origin.
+- **CORS.** `CORS_ORIGIN` accepts a comma-separated list. Public photos in
+  `uploads/` allow any origin by design (the 360 viewer needs it).
 - **No security headers** (`X-Content-Type-Options: nosniff` and the like)
   are sent by the API. Add them in Apache.
 - **CodeIgniter 3.1.13** is the last CI3 release and supports PHP up to
@@ -80,9 +89,10 @@ These are real, and the code does not handle them today.
 
 ## 3. Housekeeping the code does for you
 
-`php index.php Cron_API purgeExpired` deletes expired login tokens.
-Expired tokens are already refused at login, so a missed run costs
-nothing but table size.
+`php index.php Cron_API purgeExpired` deletes expired login tokens and
+rate-limit hits older than a day. Expired tokens are already refused at
+login and old hits are never read, so a missed run costs nothing but table
+size.
 
 An admin cannot delete their own account (`Admins_API::delete`), so at
 least one admin always remains.

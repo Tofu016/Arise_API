@@ -58,6 +58,13 @@ cd /var/www/arise-api
 composer install --no-dev --optimize-autoloader
 ```
 
+`composer.json` has `post-install-cmd` and `post-update-cmd` scripts that run
+`sed` on a file inside the dev-only `vfsStream` package. With `--no-dev` that
+file is absent, so Composer may report a script error after installing. The
+packages are installed regardless; add `--no-scripts` to silence it (nothing
+in those scripts is needed in production). Untested here: confirm on the
+server.
+
 `composer.lock` is committed, so this installs the exact versions used in
 development. `vendor/` is git-ignored and never committed.
 
@@ -109,6 +116,13 @@ DB_PASS=<a real password>
 DB_NAME=arise_web
 UPLOAD_ROOT=/var/www/arise-api/uploads/
 PROTECTED_UPLOAD_ROOT=/var/www/arise-api/protected-uploads/
+FRONTEND_URL=https://app.yourdomain.edu.ph
+EMAIL_PROTOCOL=smtp
+EMAIL_FROM=noreply@yourdomain.edu.ph
+EMAIL_SMTP_HOST=smtp.yourdomain.edu.ph
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=<smtp user>
+EMAIL_SMTP_PASS=<smtp password>
 ```
 
 - **`CI_ENV=production`** turns off `db_debug` and hides PHP errors. Do
@@ -118,6 +132,15 @@ PROTECTED_UPLOAD_ROOT=/var/www/arise-api/protected-uploads/
   in the path unless you add a rewrite rule (see notes).
 - **`CORS_ORIGIN`** is the exact scheme + host of the deployed web app,
   no trailing slash. Native apps (Expo) don't need it.
+- **`FRONTEND_URL` and `EMAIL_*`**: registration, approval and
+  password-reset emails are sent straight from the request. `FRONTEND_URL`
+  is the web app's address, used for the reset link (blank means the first
+  `CORS_ORIGIN`). The default `EMAIL_PROTOCOL=mail` uses PHP `mail()`, which
+  from a server usually lands in spam or never arrives, so point it at a real
+  SMTP server (`EMAIL_PROTOCOL=smtp` and the `EMAIL_SMTP_*` values). A failed
+  send is logged to `application/logs/` and does not fail the request. If
+  email cannot work, admins recover with `php index.php Admins_CLI setPassword`
+  (see `SEED.md`).
 - **`UPLOAD_ROOT` / `PROTECTED_UPLOAD_ROOT`** — set both explicitly to
   absolute paths (trailing slash). Don't leave them blank on the server:
   the blank-value fallback for `PROTECTED_UPLOAD_ROOT` resolves to two
@@ -232,7 +255,8 @@ sudo systemctl restart apache2
 
 ### A10. Cron — housekeeping
 
-`Cron_API::purgeExpired` deletes expired login tokens. CLI-only
+`Cron_API::purgeExpired` deletes expired login tokens and rate-limit hits
+older than a day (`rate_limit_hits`). CLI-only
 (`is_cli_request()` guards it). Once a day is plenty:
 
 ```cron
@@ -240,7 +264,7 @@ sudo systemctl restart apache2
 ```
 
 Test once by hand: `php index.php Cron_API purgeExpired` →
-`Purged: 0 login tokens.`
+`Purged: 0 login tokens.` then `Purged: 0 rate limit hits.`
 
 `Cron_API::closeStaleSessions` closes web Analytics sessions
 (`analytics_sessions.platform = 'web'`, i.e. any session not from a paired
@@ -287,6 +311,10 @@ curl -i https://api.yourdomain.edu.ph/protected-uploads/panoramas/x.jpg    # 403
 # From the deployed web app: sign in, load the map, upload a test panorama.
 ```
 
+Signing in is the check that matters most after a schema change: login
+reads and writes `rate_limit_hits`, so a missing migration shows up there
+first. Also confirm a password-reset email actually arrives.
+
 ---
 
 ## Part B — Routine redeploy (every update)
@@ -318,7 +346,32 @@ gets everything from it. A database that already exists is brought up to
 date with the statements below, oldest first, by hand. Apply an entry
 **before** deploying the code that needs it. Each is additive (new columns
 with defaults), so the previous code keeps working against the changed
-table and a rollback needs no schema change.
+table and a rollback needs no schema change. **Exceptions are marked
+"not additive" or "destructive": take a backup and deploy the code with
+the migration.**
+
+Migration files in `migrations/`, in the order to apply them to a database
+that predates them (the entries below carry the details; the earliest steps,
+from before `migrations/` existed, are inline SQL):
+
+| File | Kind |
+|---|---|
+| `2026-10-04_admins_only_no_email.sql` | not additive, back up first |
+| `2026-10-04_rate_limit_hits.sql` | additive, **required before the current code** |
+| `2026-10-05_pending_and_password_reset.sql` | additive |
+| `2026-10-05_rename_type_ids.sql` | not additive, deploy with web and mobile |
+| `2026-10-06_node_discharges_outside.sql`, `2026-10-07_rename_discharges_outside.sql` | additive |
+| `2026-10-08_placard_photos.sql`, `2026-10-09_photo_thumb_focus.sql` | additive |
+| `2026-10-10_emergency_exit_markers.sql` | not additive, back up first |
+| `2026-10-11_signage_category.sql` | additive |
+| `2026-10-12_drop_virtual_tour.sql` | drops tables, dump first |
+| `2026-10-13_analytics_mobile_platform.sql` | additive |
+| `2026-10-14_directory_settings.sql` | additive |
+| `2026-10-15_room_photo_kinds.sql` + `Photos_CLI purgeRoomPhotos` | **destructive**, back up first |
+
+Entries for steps that a later migration undoes (`leads_to_floor`,
+`leads_to_floors`) are kept only so a database at that older stage can be
+walked forward; a fresh install needs none of this.
 
 **Starting node per floor** — adds `is_starting_node` to `nodes`, the node
 an admin flags as where the kiosk drops visitors who pick that building floor:
@@ -690,6 +743,76 @@ mysql -u arise -p arise_web < migrations/2026-10-12_drop_virtual_tour.sql
 Photos under `uploads/tourpanorama/` and `uploads/tourcover/` are simply
 unreferenced afterwards — delete those folders by hand once you are sure.
 
+**Mobile analytics sessions are covered above** (`migrations/2026-10-13_analytics_mobile_platform.sql`).
+
+**Rate limiting** (`migrations/2026-10-04_rate_limit_hits.sql`, additive) adds `rate_limit_hits`, the
+hit log behind the limits on login, registration, password reset, feedback submit and analytics track
+(`application/libraries/Rate_limit.php`). **Apply it before deploying any code from 2026-10-04 on:** the
+limits run on every one of those requests and the API does not skip them when the table is missing, so
+without it admin login, feedback and tracking all fail. `Cron_API purgeExpired` trims old hits.
+
+```bash
+mysql -u arise -p arise_web < migrations/2026-10-04_rate_limit_hits.sql
+```
+
+**Extra Room photos and thumbnail focus** (additive, apply in this order; the second needs the first's
+table). Adds `placard_photos` and then `thumb_x`/`thumb_y` to it and to `placard_dialogs`. The next
+entry replaces most of this, but a database that predates it still needs both to reach it:
+
+```bash
+mysql -u arise -p arise_web < migrations/2026-10-08_placard_photos.sql
+mysql -u arise -p arise_web < migrations/2026-10-09_photo_thumb_focus.sql
+```
+
+**Signage category** (additive) adds `signage_slides.category` (`footer` or `starting`): which kiosk
+surface a slide plays on. Existing slides become `footer`. Until it is applied, saving or listing
+slides fails (unknown column `category`), so apply it before deploying:
+
+```bash
+mysql -u arise -p arise_web < migrations/2026-10-11_signage_category.sql
+```
+
+**Directory settings** (additive) adds `directory_settings`, one JSON row holding which parts of the web
+sidebar's Directory visitors see. No seed row: a missing row means everything is shown. Until it is
+applied the Directory admin page and the settings endpoint fail:
+
+```bash
+mysql -u arise -p arise_web < migrations/2026-10-14_directory_settings.sql
+```
+
+**One ordered photo list per Room, flat or 360** (**destructive**, 2026-10-15). Adds `placard_photos.kind`,
+**deletes every existing flat Room photo reference**, turns each 360 photo into a `360` row, and drops
+`placard_dialogs.photo_path`, `photo_360_path`, `thumb_x` and `thumb_y`. The API still returns
+`photo_path` and `photo_360_path` (first flat, first 360), so the mobile app is unaffected. Take a backup,
+deploy the API and web together (the old web build reads the dropped columns), then run the purge **once,
+immediately, before any new upload** (later it would also delete a photo uploaded but not yet saved):
+
+```bash
+mysqldump -u arise -p arise_web > backup-before-room-photo-kinds.sql
+mysql -u arise -p arise_web < migrations/2026-10-15_room_photo_kinds.sql
+cd /var/www/arise-api && php index.php Photos_CLI purgeRoomPhotos
+```
+
+**Emergency Exit markers replace the Fire Exit node type and `leads_to_floors`** (2026-10-10, not
+additive): a fire exit node is now a node carrying an `emergency_exit` marker, and the marker lists
+where its hidden fire stairs come out in the new `node_marker_landings` table (one directed row per
+landing; `Nodes_API addMarker/updateMarker` take `landings`, an array of node ids, and `getAll` returns
+each marker's `landings`, lowest floor first). The migration creates that table, deletes the old
+`emergency_exit` markers (the "Assembly Point" signs the mobile app used to look for: Nearest Exit now
+uses ticked Emergency Exit Destination Points), turns every `fire_exit` node into the type its id names
+(hallway if it names none), adds a marker to each with its cross-floor neighbor links as landings (those
+links are removed so ordinary directions cannot take the fire stairs), and drops `nodes.leads_to_floors`.
+It prints what it is about to convert first. Take a backup, deploy the API with it, and deploy the web
+and mobile builds together: the old builds read `leads_to_floors` and the `fire_exit` type.
+
+```bash
+mysqldump -u arise -p arise_web > backup-before-emergency-exit-markers.sql
+mysql -u arise -p arise_web < migrations/2026-10-10_emergency_exit_markers.sql
+```
+
+Converted fire doors get a marker at yaw 0 and pitch 0 and no landings: place them in the Virtual Map
+Navigation Editor. Emergency Coverage lists every marker that leads nowhere.
+
 ---
 
 ## Part C — Rollback
@@ -714,7 +837,8 @@ nightly dump (see Backups).
 20 3 * * * find /var/backups -name 'arise_web_*.sql.gz' -mtime +14 -delete
 ```
 
-Also back up the uploaded images — `/var/www/arise-api/uploads/` and
+`protected-uploads/_previews/` is a cache of downscaled copies for the mobile
+app and is rebuilt on demand, so it can be skipped. Also back up the uploaded images — `/var/www/arise-api/uploads/` and
 `/var/www/arise-api/protected-uploads/` — and a copy of the server's
 `.env`. Neither is in git or in the DB dump.
 
@@ -737,6 +861,10 @@ Also back up the uploaded images — `/var/www/arise-api/uploads/` and
 | `DB_USER` / `DB_PASS` / `DB_NAME` | `arise` / … / `arise_web` | |
 | `UPLOAD_ROOT` | `/var/www/arise-api/uploads/` | absolute, trailing slash; folder is under DocumentRoot and served directly |
 | `PROTECTED_UPLOAD_ROOT` | `/var/www/arise-api/protected-uploads/` | absolute, trailing slash; under DocumentRoot but Apache is told to deny it (A7 + A8) |
+| `FRONTEND_URL` | `https://app.yourdomain.edu.ph` | no trailing slash; used for the password-reset link; blank = first `CORS_ORIGIN` |
+| `EMAIL_PROTOCOL` | `smtp` | `mail` (default) is PHP `mail()`, unreliable from a server |
+| `EMAIL_FROM` / `EMAIL_FROM_NAME` | `noreply@yourdomain.edu.ph` / `ARISE Campus Navigator` | sender of account emails |
+| `EMAIL_SMTP_HOST` / `_PORT` / `_USER` / `_PASS` / `_CRYPTO` | … / `587` / … / … / `tls` | only read when `EMAIL_PROTOCOL=smtp` |
 
 Blank or missing keys fall back to the hard-coded development defaults in
 the code.
@@ -759,25 +887,10 @@ the code.
   owns them), set the document root to the repo folder, use the panel's
   Cron and PHP-settings UIs for A9/A10, and run `composer install` over
   SSH if available — otherwise commit `vendor/` on a branch as a fallback.
-- **Regenerating `schema.sql`** after a local schema change: the command
-  is in the header of `schema.sql` itself.
+- **Regenerating `schema.sql`** after a local schema change: it is a plain
+  `mysqldump` of the development database (the file has no header command),
+  so re-dump it and commit a matching file in `migrations/` alongside it.
+- **Leftover Virtual Tour photos.** `uploads/tourpanorama/` and
+  `uploads/tourcover/` are unreferenced since the Virtual Tour was removed;
+  delete them once you are sure.
 
-**Emergency Exit markers replace the Fire Exit node type and `leads_to_floors`** (2026-10-10, not
-additive): a fire exit node is now a node carrying an `emergency_exit` marker, and the marker lists
-where its hidden fire stairs come out in the new `node_marker_landings` table (one directed row per
-landing; `Nodes_API addMarker/updateMarker` take `landings`, an array of node ids, and `getAll` returns
-each marker's `landings`, lowest floor first). The migration creates that table, deletes the old
-`emergency_exit` markers (the "Assembly Point" signs the mobile app used to look for: Nearest Exit now
-uses ticked Emergency Exit Destination Points), turns every `fire_exit` node into the type its id names
-(hallway if it names none), adds a marker to each with its cross-floor neighbor links as landings (those
-links are removed so ordinary directions cannot take the fire stairs), and drops `nodes.leads_to_floors`.
-It prints what it is about to convert first. Take a backup, deploy the API with it, and deploy the web
-and mobile builds together: the old builds read `leads_to_floors` and the `fire_exit` type.
-
-```bash
-mysqldump -u arise -p arise_web > backup-before-emergency-exit-markers.sql
-mysql -u arise -p arise_web < migrations/2026-10-10_emergency_exit_markers.sql
-```
-
-Converted fire doors get a marker at yaw 0 and pitch 0 and no landings: place them in the Virtual Map
-Navigation Editor. Emergency Coverage lists every marker that leads nowhere.
