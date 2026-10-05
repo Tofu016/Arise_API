@@ -52,6 +52,15 @@ class SignageRulesTest extends TestCase
         $this->assertSame(array('title' => 'Enrollment', 'media_path' => 'signage/enroll.mp4'), $fields);
     }
 
+    public function testCategoryIsFooterOrStartingOnly()
+    {
+        $this->assertSame('starting', Signage_rules::slideFields($this->slide(array('category' => 'starting')), true)['category']);
+        $this->assertSame(array('category' => 'footer'), Signage_rules::slideFields(array('category' => 'footer'), false));
+        $this->assertStringStartsWith('category must be one of', $this->refusal(function () {
+            Signage_rules::slideFields($this->slide(array('category' => 'header')), true);
+        }));
+    }
+
     public function testAnUpdateTakesAnySubsetAndCanBeEmpty()
     {
         $this->assertSame(array(), Signage_rules::slideFields(array('bogus' => 1), false));

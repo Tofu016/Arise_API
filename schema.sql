@@ -297,6 +297,7 @@ DROP TABLE IF EXISTS `signage_slides`;
 CREATE TABLE `signage_slides` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `title` varchar(255) NOT NULL,
+  `category` enum('footer','starting') NOT NULL DEFAULT 'footer',
   `media_path` varchar(500) NOT NULL,
   `crop_x` decimal(7,6) NOT NULL DEFAULT 0.000000,
   `crop_y` decimal(7,6) NOT NULL DEFAULT 0.000000,

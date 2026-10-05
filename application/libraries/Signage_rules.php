@@ -23,6 +23,9 @@ class Signage_rules
     const MAX_DURATION = 600;
     const ROTATION_ORDERS = array('sequence', 'shuffle');
     const TRANSITIONS = array('fade', 'cut');
+    // Where a slide plays: the kiosk's bottom whitespace, or its starting
+    // screen. A create without one is a footer slide.
+    const CATEGORIES = array('footer', 'starting');
 
     // The crop is a rectangle in fractions of the media's own width and
     // height (0..1), so it survives the file being re-encoded at another
@@ -53,6 +56,13 @@ class Signage_rules
                 self::refuse('title must be at most 255 characters.');
             }
             $fields['title'] = $title;
+        }
+
+        if (array_key_exists('category', $data)) {
+            if (!in_array($data['category'], self::CATEGORIES, true)) {
+                self::refuse('category must be one of: ' . implode(', ', self::CATEGORIES) . '.');
+            }
+            $fields['category'] = $data['category'];
         }
 
         if ($creating || array_key_exists('media_path', $data)) {
