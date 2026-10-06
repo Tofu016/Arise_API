@@ -49,6 +49,13 @@ class PlacardDialogsActionsTest extends ActionTestCase
             'saveOcr: too many rooms' => array('saveOcr', array(), array('rooms' => array_fill(0, 2001, array('room_name' => 'A'))), array(), 400, 'Too many rooms in one save.'),
             'saveOcr: transaction failed' => array('saveOcr', array(), array('rooms' => array(array('room_name' => 'A'))), array('PlacardDialogs_Model' => array('saveOcr' => false)), 500, "Couldn't save the OCR settings."),
             'saveOcr: valid' => array('saveOcr', array(), array('rooms' => array(array('room_name' => 'A'))), array('PlacardDialogs_Model' => array('saveOcr' => true, 'getAll' => array())), 200, null),
+            'saveOcr: only the scanner message' => array('saveOcr', array(), array('scanner_message' => 'Hi'), array('PlacardDialogs_Model' => array('saveOcr' => true, 'getAll' => array())), 200, null),
+            'saveOcr: scanner message too long' => array('saveOcr', array(), array('scanner_message' => str_repeat('a', 301)), array(), 400, 'scanner_message is too long.'),
+            'saveOcr: an AR 360 image path too long' => array('saveOcr', array(), array('rooms' => array(array('room_name' => 'A', 'ocr_photos' => array(str_repeat('a', 501))))), array(), 400, 'An ocr_photos path is too long.'),
+            'saveOcr: AR 360 images not a list' => array('saveOcr', array(), array('rooms' => array(array('room_name' => 'A', 'ocr_photos' => 'a.webp'))), array(), 400, 'ocr_photos must be a list of photo paths.'),
+            'saveOcr: an AR 360 image not a path' => array('saveOcr', array(), array('rooms' => array(array('room_name' => 'A', 'ocr_photos' => array(array('x'))))), array(), 400, 'ocr_photos must be a list of photo paths.'),
+            'saveOcr: too many AR 360 images' => array('saveOcr', array(), array('rooms' => array(array('room_name' => 'A', 'ocr_photos' => array_map(function ($i) { return "room360/a/$i.webp"; }, range(1, 21))))), array(), 400, 'A room can have at most 20 AR 360 images.'),
+            'getOcrSettings: public' => array('getOcrSettings', array(), array(), array('PlacardDialogs_Model' => array('getOcrSettings' => array('scanner_message' => null))), 200, null),
         );
     }
 
@@ -73,6 +80,31 @@ class PlacardDialogsActionsTest extends ActionTestCase
             array('room_name' => 'GD1-101', 'ocr_enabled' => 1, 'placard_name' => 'GD1-101', 'search_terms' => array('gd1-101', 'gd1101'), 'extra_search_terms' => array('rm101')),
             array('room_name' => 'Canteen', 'ocr_enabled' => 0, 'placard_name' => null, 'search_terms' => array(), 'extra_search_terms' => array()),
         ), $calls[0][1][0]);
+    }
+
+    // ocr_photos reaches the model only when sent (an older admin build
+    // doesn't send it, which must not clear it), trimmed, without blanks or
+    // repeats; scanner_message is trimmed, blank as none, and left out
+    // entirely when not sent.
+    public function testSaveOcrPassesTheOcrImageAndMessage()
+    {
+        $this->call('PlacardDialogsApiHarness', 'saveOcr', array(), array('scanner_message' => '  Look around!  ', 'rooms' => array(
+            array('room_name' => 'Lab', 'ocr_photos' => array(' room360/gd1/lab.webp ', 'room360/gd1/lab2.webp', '', 'room360/gd1/lab.webp')),
+            array('room_name' => 'Canteen', 'ocr_photos' => array()),
+            array('room_name' => 'Library'),
+        )), array('PlacardDialogs_Model' => array('saveOcr' => true, 'getAll' => array())));
+
+        $args = $this->controller->PlacardDialogs_Model->calls[0][1];
+        $this->assertSame(array('room360/gd1/lab.webp', 'room360/gd1/lab2.webp'), $args[0][0]['ocr_photos']);
+        $this->assertSame(array(), $args[0][1]['ocr_photos']);
+        $this->assertArrayNotHasKey('ocr_photos', $args[0][2]);
+        $this->assertSame(array('scanner_message' => 'Look around!'), $args[1]);
+
+        $this->call('PlacardDialogsApiHarness', 'saveOcr', array(), array('scanner_message' => '   '), array('PlacardDialogs_Model' => array('saveOcr' => true, 'getAll' => array())));
+        $this->assertSame(array('scanner_message' => null), $this->controller->PlacardDialogs_Model->calls[0][1][1]);
+
+        $this->call('PlacardDialogsApiHarness', 'saveOcr', array(), array('rooms' => array(array('room_name' => 'A'))), array('PlacardDialogs_Model' => array('saveOcr' => true, 'getAll' => array())));
+        $this->assertNull($this->controller->PlacardDialogs_Model->calls[0][1][1], 'no scanner_message sent, settings left as they are');
     }
 
     public function testUpdatePassesOcrFieldsAndExtraTermsToTheModel()

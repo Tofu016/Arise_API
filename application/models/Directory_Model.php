@@ -15,6 +15,8 @@ class Directory_Model extends CI_Model
         'hidden_campuses' => array(),
         'hidden_buildings' => array(),
         'building_rooms' => array(),
+        // Buildings the sidebar opens expanded (a solo campus counts as its one building).
+        'expanded_buildings' => array(),
     );
 
     public function __construct()

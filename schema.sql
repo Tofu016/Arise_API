@@ -259,10 +259,31 @@ CREATE TABLE `placard_photos` (
   `kind` enum('flat','360') NOT NULL DEFAULT 'flat',
   `thumb_x` tinyint(3) unsigned NOT NULL DEFAULT 50,
   `thumb_y` tinyint(3) unsigned NOT NULL DEFAULT 50,
+  `view_yaw` smallint(6) NOT NULL DEFAULT 0,
+  `view_pitch` smallint(6) NOT NULL DEFAULT 0,
+  `thumb_yaw` smallint(6) NOT NULL DEFAULT 0,
+  `thumb_pitch` smallint(6) NOT NULL DEFAULT 0,
+  `thumb_fov` smallint(6) NOT NULL DEFAULT 80,
+  `cell_yaw` smallint(6) NOT NULL DEFAULT 0,
+  `cell_pitch` smallint(6) NOT NULL DEFAULT 0,
+  `cell_fov` smallint(6) NOT NULL DEFAULT 80,
   `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `placard_dialog_id` (`placard_dialog_id`),
   CONSTRAINT `placard_photos_ibfk_1` FOREIGN KEY (`placard_dialog_id`) REFERENCES `placard_dialogs` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `placard_ocr_photos`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `placard_ocr_photos` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `placard_dialog_id` int(10) unsigned NOT NULL,
+  `photo_path` varchar(500) NOT NULL,
+  `sort_order` int(10) unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `placard_dialog_id` (`placard_dialog_id`),
+  CONSTRAINT `placard_ocr_photos_ibfk_1` FOREIGN KEY (`placard_dialog_id`) REFERENCES `placard_dialogs` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `placard_search_terms`;
@@ -285,6 +306,16 @@ DROP TABLE IF EXISTS `directory_settings`;
 CREATE TABLE `directory_settings` (
   `id` tinyint(3) unsigned NOT NULL,
   `config` mediumtext NOT NULL,
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ocr_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `ocr_settings` (
+  `id` tinyint(3) unsigned NOT NULL,
+  `scanner_message` varchar(300) DEFAULT NULL,
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

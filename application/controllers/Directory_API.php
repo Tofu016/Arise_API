@@ -22,8 +22,9 @@ class Directory_API extends MY_Controller
     }
 
     // PATCH /Directory_API/settings: admin only.
-    // Body: any of show_saved (bool), hidden_campuses, hidden_buildings
-    // (lists of ids), and building_rooms: a map of building id to
+    // Body: any of show_saved (bool), hidden_campuses, hidden_buildings,
+    // expanded_buildings (lists of ids; the last is which buildings the sidebar
+    // opens expanded), and building_rooms: a map of building id to
     // { incoming (bool), listed (room names), removed (room names) }. A
     // building lists its `listed` rooms; with `incoming` on it also lists
     // every room not in `removed`, so rooms created later appear. A building
@@ -37,7 +38,7 @@ class Directory_API extends MY_Controller
         if (array_key_exists('show_saved', $data)) {
             $fields['show_saved'] = (bool) $data['show_saved'];
         }
-        foreach (array('hidden_campuses', 'hidden_buildings') as $key) {
+        foreach (array('hidden_campuses', 'hidden_buildings', 'expanded_buildings') as $key) {
             if (!array_key_exists($key, $data)) {
                 continue;
             }

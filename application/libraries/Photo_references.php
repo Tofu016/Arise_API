@@ -24,6 +24,7 @@ class Photo_references
     const SOURCES = array(
         'nodes' => array('photo_path'),
         'placard_photos' => array('photo_path'),
+        'placard_ocr_photos' => array('photo_path'),
         'signage_slides' => array('media_path'),
     );
 
