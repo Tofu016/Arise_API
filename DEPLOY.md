@@ -368,6 +368,7 @@ from before `migrations/` existed, are inline SQL):
 | `2026-10-13_analytics_mobile_platform.sql` | additive |
 | `2026-10-14_directory_settings.sql` | additive |
 | `2026-10-15_room_photo_kinds.sql` + `Photos_CLI purgeRoomPhotos` | **destructive**, back up first |
+| `2026-10-16_ocr_placard_names.sql` | additive |
 
 Entries for steps that a later migration undoes (`leads_to_floor`,
 `leads_to_floors`) are kept only so a database at that older stage can be
@@ -791,6 +792,19 @@ immediately, before any new upload** (later it would also delete a photo uploade
 mysqldump -u arise -p arise_web > backup-before-room-photo-kinds.sql
 mysql -u arise -p arise_web < migrations/2026-10-15_room_photo_kinds.sql
 cd /var/www/arise-api && php index.php Photos_CLI purgeRoomPhotos
+```
+
+**OCR Management** (additive, 2026-10-16) adds `placard_dialogs.ocr_enabled` and `placard_name`, and
+`placard_search_terms.is_extra`. The scanner in the mobile app matches only rooms and facilities with
+`ocr_enabled` set; their search terms are generated from the Placard name (`is_extra` = 0) or typed in by
+an admin (`is_extra` = 1). Every room or facility that already had a search term starts out eligible,
+with its room name as its Placard name, so scanning keeps working. Apply it before deploying the API
+and web builds that use it: `PlacardDialogs_API saveOcr` and the OCR Management page fail without it.
+The mobile build that reads `ocr_enabled` treats a missing flag as eligible, so against an older API
+that does not send it, it falls back to matching every room, as before:
+
+```bash
+mysql -u arise -p arise_web < migrations/2026-10-16_ocr_placard_names.sql
 ```
 
 **Emergency Exit markers replace the Fire Exit node type and `leads_to_floors`** (2026-10-10, not

@@ -29,6 +29,7 @@ class PlacardDialogs_Model extends CI_Model
             $id = $row['id'];
             $row['search_terms'] = isset($termsByDialog[$id]) ? $termsByDialog[$id] : array();
             $this->_attachPhotos($row, isset($photosByDialog[$id]) ? $photosByDialog[$id] : array());
+            $this->_castOcr($row);
         }
         unset($row);
 
@@ -49,6 +50,7 @@ class PlacardDialogs_Model extends CI_Model
         $row['search_terms'] = isset($termsByDialog[$id]) ? $termsByDialog[$id] : array();
         $photosByDialog = $this->_getPhotosGrouped($id);
         $this->_attachPhotos($row, isset($photosByDialog[$id]) ? $photosByDialog[$id] : array());
+        $this->_castOcr($row);
         return $row;
     }
 
@@ -69,14 +71,27 @@ class PlacardDialogs_Model extends CI_Model
         }
         $rows = $this->db->get()->result_array();
 
+        // is_extra: typed in by an admin on the OCR Management page, as
+        // opposed to generated from the Placard name.
         $grouped = array();
         foreach ($rows as $row) {
             $grouped[$row['placard_dialog_id']][] = array(
                 'id' => $row['id'],
                 'term' => $row['term'],
+                'is_extra' => (int) $row['is_extra'],
             );
         }
         return $grouped;
+    }
+
+    // The OCR columns as the clients read them: a 0/1 flag, and null for a
+    // Placard name never set.
+    private function _castOcr(&$row)
+    {
+        $row['ocr_enabled'] = (int) $row['ocr_enabled'];
+        if ($row['placard_name'] === '') {
+            $row['placard_name'] = null;
+        }
     }
 
     // `photos` is the room's whole ordered list. photo_path and photo_360_path
@@ -134,7 +149,63 @@ class PlacardDialogs_Model extends CI_Model
         return $this->db->get()->num_rows() > 0;
     }
 
-    public function create($roomName, $data, $searchTerms = array(), $photos = array())
+    public function create($roomName, $data, $searchTerms = array(), $photos = array(), $extraTerms = array())
+    {
+        $id = $this->_insertDialog($roomName, $data, $searchTerms, $extraTerms);
+        $this->_replacePhotos($id, $photos);
+
+        return $this->find($id);
+    }
+
+    // $searchTerms (the generated ones): null leaves them untouched, an
+    // array (including empty) replaces that set. $extraTerms and $photos
+    // follow the same convention, each on its own set.
+    public function update($id, $data, $searchTerms = null, $photos = null, $extraTerms = null)
+    {
+        $this->_updateDialog($id, $data, $searchTerms, $extraTerms);
+
+        if ($photos !== null) {
+            $this->_replacePhotos($id, $photos);
+        }
+
+        return $this->find($id);
+    }
+
+    // The OCR Management page's save: every row it changed, in one
+    // transaction, so a failure part way leaves the rooms as they were
+    // rather than half saved. Each row is matched to its record by name and
+    // creates one when the room has none yet. Each row: room_name,
+    // ocr_enabled (0/1), placard_name (null for none), search_terms and
+    // extra_search_terms (both replace their set). Returns false when the
+    // transaction failed.
+    public function saveOcr(array $rows)
+    {
+        $this->db->trans_start();
+        foreach ($rows as $row) {
+            $data = array('ocr_enabled' => $row['ocr_enabled'], 'placard_name' => $row['placard_name']);
+            $id = $this->_idForRoomName($row['room_name']);
+            if ($id === null) {
+                $data['description'] = '';
+                $this->_insertDialog($row['room_name'], $data, $row['search_terms'], $row['extra_search_terms']);
+            } else {
+                $this->_updateDialog($id, $data, $row['search_terms'], $row['extra_search_terms']);
+            }
+        }
+        $this->db->trans_complete();
+        return $this->db->trans_status();
+    }
+
+    // room_name's collation ignores case, the same match the clients make.
+    private function _idForRoomName($roomName)
+    {
+        $this->db->select('id');
+        $this->db->from($this->table);
+        $this->db->where('room_name', trim($roomName));
+        $row = $this->db->get()->row_array();
+        return $row ? $row['id'] : null;
+    }
+
+    private function _insertDialog($roomName, $data, $searchTerms, $extraTerms)
     {
         $now = date('Y-m-d H:i:s');
         $data['room_name'] = trim($roomName);
@@ -144,34 +215,32 @@ class PlacardDialogs_Model extends CI_Model
         $this->db->insert($this->table, $data);
         $id = $this->db->insert_id();
 
-        $this->_insertSearchTerms($id, $searchTerms);
-        $this->_replacePhotos($id, $photos);
-
-        return $this->find($id);
+        $this->_insertSearchTerms($id, $searchTerms, 0);
+        $this->_insertSearchTerms($id, $extraTerms, 1);
+        return $id;
     }
 
-    // $searchTerms: null leaves them untouched, an array (including
-    // empty) replaces the full set.
-    public function update($id, $data, $searchTerms = null, $photos = null)
+    private function _updateDialog($id, $data, $searchTerms, $extraTerms)
     {
         if (!empty($data)) {
             $data['updated_at'] = date('Y-m-d H:i:s');
             $this->db->where('id', $id);
             $this->db->update($this->table, $data);
         }
-
         if ($searchTerms !== null) {
-            $this->db->where('placard_dialog_id', $id);
-            $this->db->delete('placard_search_terms');
-            $this->_insertSearchTerms($id, $searchTerms);
+            $this->_replaceSearchTerms($id, $searchTerms, 0);
         }
-
-        // Same null-vs-array convention as $searchTerms.
-        if ($photos !== null) {
-            $this->_replacePhotos($id, $photos);
+        if ($extraTerms !== null) {
+            $this->_replaceSearchTerms($id, $extraTerms, 1);
         }
+    }
 
-        return $this->find($id);
+    private function _replaceSearchTerms($dialogId, $terms, $isExtra)
+    {
+        $this->db->where('placard_dialog_id', $dialogId);
+        $this->db->where('is_extra', $isExtra);
+        $this->db->delete('placard_search_terms');
+        $this->_insertSearchTerms($dialogId, $terms, $isExtra);
     }
 
     public function delete($id)
@@ -209,16 +278,24 @@ class PlacardDialogs_Model extends CI_Model
         return max(0, min(100, (int) round((float) $value)));
     }
 
-    private function _insertSearchTerms($dialogId, $terms)
+    // Blank, non-string and over-long terms are dropped, and a repeat is
+    // stored once.
+    private function _insertSearchTerms($dialogId, $terms, $isExtra)
     {
+        $seen = array();
         foreach ($terms as $term) {
-            $term = trim($term);
-            if ($term === '') {
+            if (!is_string($term)) {
                 continue;
             }
+            $term = trim($term);
+            if ($term === '' || mb_strlen($term) > 255 || isset($seen[$term])) {
+                continue;
+            }
+            $seen[$term] = true;
             $this->db->insert('placard_search_terms', array(
                 'placard_dialog_id' => $dialogId,
                 'term' => $term,
+                'is_extra' => $isExtra,
             ));
         }
     }

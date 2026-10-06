@@ -36,8 +36,53 @@ class PlacardDialogsActionsTest extends ActionTestCase
             'update: search_terms that is not a list is no change' => array('update', array('1'), array('search_terms' => 'a'), $this->nameTaken(false), 400, $noFields),
             'update: valid field' => array('update', array('1'), array('description' => 'd'), $this->nameTaken(false), 200, null),
 
+            'update: OCR fields alone are a change' => array('update', array('1'), array('ocr_enabled' => true), $this->nameTaken(false), 200, null),
+            'update: extra_search_terms alone is a change' => array('update', array('1'), array('extra_search_terms' => array('x')), $this->nameTaken(false), 200, null),
+            'update: placard_name too long' => array('update', array('1'), array('placard_name' => str_repeat('a', 256)), $this->nameTaken(false), 400, 'placard_name is too long.'),
+
             'delete: no id' => array('delete', array(), array(), array(), 400, $noId),
             'delete: valid' => array('delete', array('1'), array(), array(), 200, null),
+
+            'saveOcr: no rooms' => array('saveOcr', array(), array(), array(), 400, 'rooms is required.'),
+            'saveOcr: rooms not a list' => array('saveOcr', array(), array('rooms' => 'x'), array(), 400, 'rooms is required.'),
+            'saveOcr: a room without a name' => array('saveOcr', array(), array('rooms' => array(array('ocr_enabled' => 1))), array(), 400, 'Each room needs a room_name.'),
+            'saveOcr: too many rooms' => array('saveOcr', array(), array('rooms' => array_fill(0, 2001, array('room_name' => 'A'))), array(), 400, 'Too many rooms in one save.'),
+            'saveOcr: transaction failed' => array('saveOcr', array(), array('rooms' => array(array('room_name' => 'A'))), array('PlacardDialogs_Model' => array('saveOcr' => false)), 500, "Couldn't save the OCR settings."),
+            'saveOcr: valid' => array('saveOcr', array(), array('rooms' => array(array('room_name' => 'A'))), array('PlacardDialogs_Model' => array('saveOcr' => true, 'getAll' => array())), 200, null),
         );
+    }
+
+    public function testSaveOcrRequiresAnAdmin()
+    {
+        $reply = $this->call('PlacardDialogsApiHarness', 'saveOcr', array(), array('rooms' => array(array('room_name' => 'A'))), array(), null);
+        $this->assertSame(401, $reply->status());
+    }
+
+    // What reaches the model: names trimmed, flags as 0/1, a blank Placard
+    // name as none, missing term lists as empty.
+    public function testSaveOcrCleansEachRow()
+    {
+        $this->call('PlacardDialogsApiHarness', 'saveOcr', array(), array('rooms' => array(
+            array('room_name' => ' GD1-101 ', 'ocr_enabled' => true, 'placard_name' => ' GD1-101 ', 'search_terms' => array('gd1-101', 'gd1101'), 'extra_search_terms' => array('rm101')),
+            array('room_name' => 'Canteen', 'ocr_enabled' => false, 'placard_name' => '  '),
+        )), array('PlacardDialogs_Model' => array('saveOcr' => true, 'getAll' => array())));
+
+        $calls = $this->controller->PlacardDialogs_Model->calls;
+        $this->assertSame('saveOcr', $calls[0][0]);
+        $this->assertSame(array(
+            array('room_name' => 'GD1-101', 'ocr_enabled' => 1, 'placard_name' => 'GD1-101', 'search_terms' => array('gd1-101', 'gd1101'), 'extra_search_terms' => array('rm101')),
+            array('room_name' => 'Canteen', 'ocr_enabled' => 0, 'placard_name' => null, 'search_terms' => array(), 'extra_search_terms' => array()),
+        ), $calls[0][1][0]);
+    }
+
+    public function testUpdatePassesOcrFieldsAndExtraTermsToTheModel()
+    {
+        $this->call('PlacardDialogsApiHarness', 'update', array('1'), array('ocr_enabled' => 0, 'placard_name' => 'Lab', 'extra_search_terms' => array('lab-a')), $this->nameTaken(false));
+
+        $call = $this->controller->PlacardDialogs_Model->calls[0];
+        $this->assertSame('update', $call[0]);
+        $this->assertSame(array('ocr_enabled' => 0, 'placard_name' => 'Lab'), $call[1][1]);
+        $this->assertNull($call[1][2], 'search_terms not sent, so left untouched');
+        $this->assertSame(array('lab-a'), $call[1][4]);
     }
 }
